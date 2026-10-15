@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "db:projects": "tsx scripts/supabase/projects.ts",
     "db:inspect": "tsx scripts/supabase/inspect.ts",
+    "db:status": "tsx scripts/supabase/status.ts",
     "db:migrate": "tsx scripts/supabase/migrate.ts",
     "env:pull": "tsx scripts/supabase/env-pull.ts",
     "auth:config": "tsx scripts/supabase/auth-config.ts",
