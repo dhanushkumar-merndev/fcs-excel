@@ -43,7 +43,9 @@ pnpm bootstrap:admin --target live --email owner@your-domain.com --name "Owner N
 pnpm build && pnpm start
 ```
 
-`bootstrap:admin` prints a one-time link for setting the first admin's password. After that, the admin invites everyone else from **Team**.
+`bootstrap:admin` prints a one-time link for setting the first admin's password. After that, the admin invites everyone else from **Team**. If a link can't be used, `pnpm staff:password --target live --email … [--password …]` sets a password on an existing staff account directly.
+
+**Current deployment:** https://fcs-crm-sales.vercel.app. This is the Vercel project `fcs-crm-sales` in the `fcs25` team. `vercel.json` sets the Next.js preset and runs functions in Mumbai (`bom1`), next to the Supabase project in `ap-south-1`. To redeploy, run `npx vercel deploy --prod`. `.vercelignore` keeps every `.env*` file out of the upload.
 
 If you deploy to a host such as Vercel, set these variables in its dashboard instead of using `.env.production.local`:
 

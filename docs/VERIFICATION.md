@@ -14,6 +14,12 @@
 | `pnpm test` | **60 / 60 passed** |
 | `pnpm test:e2e` (smoke) | **6 / 6 passed** (desktop and mobile) |
 
+**Live deployment, checked 15 Oct 2026 at https://fcs-crm-sales.vercel.app:**
+- All 6 migrations are applied, both cron jobs are active, and public sign-up is disabled.
+- An admin signed in at 1440 px and 360 px without browser errors. The dashboard, Leads, Import and Team pages returned 200.
+- Signed-out requests redirect to `/login`, and the API returns 401.
+- Responses come from `bom1` (Mumbai).
+
 **Pending:** the Playwright workflow specs (`tests/e2e/workflows.spec.ts`) need the hosted staging project and `pnpm seed:demo`. They have not run yet because the staging project doesn't exist yet.
 
 | Completion criterion | Evidence | Status |
