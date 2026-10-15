@@ -85,3 +85,20 @@ export const SKIP_REASON_LABELS: Record<string, string> = {
   skipped_by_reviewer: "Skipped during duplicate review",
   cancelled: "Import discarded",
 };
+
+/** Rows exactly as staged into import_rows (shared by the API route and tests). */
+export function buildStagedRows(plan: PreparedImport) {
+  return plan.rows.map((r) => {
+    const base = { row_number: r.row.rowNumber, raw: r.row.original, issues: r.row.issues, warnings: r.review.warnings };
+    if (r.status === "invalid") return { ...base, normalized: null, status: "invalid", decision: "skip", skip_reason: null };
+    // Exact duplicates with a unique key go through the database's unique constraint, which skips
+    // them and links the existing lead — the database stays the source of truth under concurrency.
+    const dbEnforced =
+      (r.skipReason === "exact_duplicate" || r.skipReason === "duplicate_in_file") &&
+      Boolean(r.row.lead.external_lead_id || r.row.lead.source_fingerprint);
+    if (r.status === "skipped" && !dbEnforced) {
+      return { ...base, normalized: r.row.lead, status: "pending", decision: "skip", skip_reason: r.skipReason };
+    }
+    return { ...base, normalized: r.row.lead, status: "pending", decision: "import", skip_reason: null };
+  });
+}

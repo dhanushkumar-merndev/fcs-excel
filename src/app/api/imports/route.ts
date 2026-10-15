@@ -5,7 +5,7 @@ import { z } from "zod";
 import { dbErrorResponse, jsonError, requireApiStaff } from "@/lib/api";
 import type { ExistingLead } from "@/lib/import/duplicates";
 import { ImportFileError, parseImportFile, rowLimitError } from "@/lib/import/parse";
-import { matchKeys, normalizeAll, prepareImport } from "@/lib/import/prepare";
+import { buildStagedRows, matchKeys, normalizeAll, prepareImport } from "@/lib/import/prepare";
 import { missingRequired, TEMPLATE_COLUMNS, type ColumnMapping } from "@/lib/import/template";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -130,19 +130,7 @@ export async function POST(request: NextRequest) {
     console.warn("Import file upload skipped", error);
   }
 
-  const rows = plan.rows.map((r) => {
-    const base = { row_number: r.row.rowNumber, raw: r.row.original, issues: r.row.issues, warnings: r.review.warnings };
-    if (r.status === "invalid") return { ...base, normalized: null, status: "invalid", decision: "skip", skip_reason: null };
-    // Exact duplicates with a unique key go through the database's unique constraint, which skips
-    // them and links the existing lead — the database stays the source of truth under concurrency.
-    const dbEnforced =
-      (r.skipReason === "exact_duplicate" || r.skipReason === "duplicate_in_file") &&
-      Boolean(r.row.lead.external_lead_id || r.row.lead.source_fingerprint);
-    if (r.status === "skipped" && !dbEnforced) {
-      return { ...base, normalized: r.row.lead, status: "pending", decision: "skip", skip_reason: r.skipReason };
-    }
-    return { ...base, normalized: r.row.lead, status: "pending", decision: "import", skip_reason: null };
-  });
+  const rows = buildStagedRows(plan);
 
   // Rows are staged in one call (≤ 1,000); processing then runs in recoverable chunks.
   const { error: stageError } = await supabase.rpc("import_stage_rows", { p_batch_id: batchId, p_rows: rows });
