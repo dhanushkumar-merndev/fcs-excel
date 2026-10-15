@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts", "tests/db/**/*.test.ts"],
+    exclude: ["tests/e2e/**", "node_modules/**"],
     testTimeout: 60_000,
     hookTimeout: 120_000,
   },
