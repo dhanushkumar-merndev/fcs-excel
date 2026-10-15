@@ -28,6 +28,7 @@ export type LeadFilters = {
   import_batch?: string;
   assigned_since?: string;
   phone?: string;
+  source?: "meta_lead_ads" | "manual";
   ids?: string[];
   activity?: { type: "call" | "dial" | "follow_up_completed" | "booked"; outcome?: string; from?: string; to?: string; actor?: string };
 };
@@ -138,6 +139,8 @@ export function parseExplicitFilters(params: Params): LeadFilters {
   if (batch && /^[0-9a-f-]{36}$/i.test(batch)) f.import_batch = batch;
   const phone = read(params, "phone");
   if (phone && /^\+\d{7,15}$/.test(phone)) f.phone = phone;
+  const source = read(params, "source");
+  if (source === "meta_lead_ads" || source === "manual") f.source = source;
   const activity = read(params, "activity");
   if (activity === "call" || activity === "dial" || activity === "follow_up_completed" || activity === "booked") {
     f.activity = {
@@ -178,6 +181,7 @@ export function filtersToParams(filters: LeadFilters, extra: Record<string, stri
   if (filters.no_contact) p.set("no_contact", "1");
   if (filters.import_batch) p.set("import", filters.import_batch);
   if (filters.phone) p.set("phone", filters.phone);
+  if (filters.source) p.set("source", filters.source);
   if (filters.activity) {
     p.set("activity", filters.activity.type);
     if (filters.activity.outcome) p.set("activity_outcome", filters.activity.outcome);
@@ -209,6 +213,7 @@ export function activeFilterCount(f: LeadFilters) {
   if (f.import_batch) n++;
   if (f.activity) n++;
   if (f.phone) n++;
+  if (f.source) n++;
   return n;
 }
 

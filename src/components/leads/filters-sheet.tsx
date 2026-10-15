@@ -291,6 +291,7 @@ export function FilterChips({
   if (filters.no_contact) chips.push({ key: "nc", label: "Awaiting first call", params: ["no_contact"] });
   if (filters.import_batch) chips.push({ key: "ib", label: "From one import", params: ["import"] });
   if (filters.phone) chips.push({ key: "ph", label: `Phone ${filters.phone}`, params: ["phone"] });
+  if (filters.source) chips.push({ key: "src", label: filters.source === "manual" ? "Added manually" : "Imported from Meta", params: ["source"] });
   if (filters.activity) {
     const a = filters.activity;
     const what =

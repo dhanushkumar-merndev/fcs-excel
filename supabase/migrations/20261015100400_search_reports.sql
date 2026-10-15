@@ -36,6 +36,7 @@ grant execute on function private.ist_day_start(text), private.ist_day_end(text)
     imported_from/imported_to (IST date, CRM entry), closed_from/closed_to (IST date),
     follow_up ('overdue'|'today'|'upcoming'|'none'|'due'), review (bool), no_contact (bool),
     import_batch (uuid), ids[] (uuid), assigned_since (timestamptz), phone (E.164),
+    source ('meta_lead_ads'|'manual'),
     activity {type: call|dial|follow_up_completed|booked, outcome?, from?, to?, actor?}
 */
 create or replace function public.search_leads(p_filters jsonb default '{}'::jsonb)
@@ -70,6 +71,7 @@ language sql stable security invoker set search_path = '' as $$
       nullif(p_filters->>'import_batch', '') as import_batch,
       nullif(p_filters->>'assigned_since', '')::timestamptz as assigned_since,
       nullif(p_filters->>'phone', '') as phone,
+      nullif(p_filters->>'source', '') as source,
       p_filters->'activity' as activity,
       ((now() at time zone 'Asia/Kolkata')::date + 1)::timestamp at time zone 'Asia/Kolkata' as today_end
   )
@@ -117,6 +119,7 @@ language sql stable security invoker set search_path = '' as $$
     and (f.import_batch is null or l.import_batch_id::text = f.import_batch)
     and (f.assigned_since is null or l.assigned_at >= f.assigned_since)
     and (f.phone is null or l.phone_e164 = f.phone)
+    and (f.source is null or l.source_system = f.source)
     and (f.activity is null or (
       case f.activity->>'type'
         when 'call' then exists (
@@ -332,8 +335,8 @@ begin
     'imported_by_day', (select coalesce(jsonb_agg(jsonb_build_object('day', d, 'leads', c) order by d), '[]')
                   from (select (l.created_at at time zone 'Asia/Kolkata')::date d, count(*) c
                         from public.search_leads(v_activity_filters || jsonb_strip_nulls(jsonb_build_object(
-                               'imported_from', p_filters->>'acquired_from', 'imported_to', p_filters->>'acquired_to'))) l
-                        where l.source_system = 'meta_lead_ads'
+                               'imported_from', p_filters->>'acquired_from', 'imported_to', p_filters->>'acquired_to',
+                               'source', 'meta_lead_ads'))) l
                         group by 1) x)
   ) into v_activity;
 
