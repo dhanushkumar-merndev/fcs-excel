@@ -17,6 +17,7 @@
     "db:migrate": "tsx scripts/supabase/migrate.ts",
     "env:pull": "tsx scripts/supabase/env-pull.ts",
     "auth:config": "tsx scripts/supabase/auth-config.ts",
+    "staff:password": "tsx scripts/set-password.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "fixtures": "tsx scripts/fixtures/generate.ts"
