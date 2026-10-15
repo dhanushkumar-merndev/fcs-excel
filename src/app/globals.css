@@ -37,6 +37,9 @@
   --danger: #b42318;
   --danger-hover: #912018;
   --success: #23663a;
+  /* Chart mark hue (validated: lightness band, chroma, >=3:1 on surface) */
+  --chart-1: #2a78d6;
+  --chart-wash: rgb(42 120 214 / 0.1);
 }
 
 :root[data-theme="dark"] {
@@ -70,6 +73,8 @@
   --danger: #f2877b;
   --danger-hover: #f5a299;
   --success: #a3d9b1;
+  --chart-1: #3987e5;
+  --chart-wash: rgb(57 135 229 / 0.12);
 }
 
 @theme inline {
@@ -114,6 +119,8 @@
   --color-tint-red-fg: var(--tint-red-fg);
 
   --shadow-soft: var(--shadow);
+  --color-chart-1: var(--chart-1);
+  --color-chart-wash: var(--chart-wash);
 }
 
 @layer base {
