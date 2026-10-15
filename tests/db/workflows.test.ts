@@ -306,7 +306,7 @@ describe("imports", () => {
 
   it("records invalid rows and failed rows without aborting the batch, and retries safely", async () => {
     const bad = row(3, "l:777", "not-a-phone");
-    const invalid = { ...row(4, "l:778", "+919000000078"), status: "invalid", normalized: null };
+    const invalid = { ...row(4, "l:778", "+919000000078"), status: "invalid", normalized: null } as unknown as ReturnType<typeof row>;
     const res = await runImport([row(2, "l:776", "+919000000076"), bad, invalid]);
     expect(res.progress).toMatchObject({ created: 1, failed: 1, invalid: 1, status: "completed_with_issues" });
     const [{ total }] = await select<{ total: number }>(MANAGER,
