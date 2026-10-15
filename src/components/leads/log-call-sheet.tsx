@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { logCall } from "@/actions/leads";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Textarea } from "@/components/ui/field";
@@ -10,7 +10,7 @@ import { formatDue } from "@/lib/domain/format";
 import { CALL_OUTCOMES, type CallOutcome } from "@/lib/domain/labels";
 import { defaultPurpose } from "@/lib/domain/schedule";
 import { stageLabel, suggestedStageAfterCall } from "@/lib/domain/stages";
-import { usePersistentDraft, useRequestId } from "@/lib/hooks";
+import { useOnOpen, usePersistentDraft, useRequestId } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { TimePicker, type TimeChoice } from "./time-picker";
 import { useRunAction } from "./use-run-action";
@@ -42,26 +42,22 @@ export function LogCallSheet({
   const [outcome, setOutcome] = useState<CallOutcome | null>(null);
   const [note, setNote, clearNote] = usePersistentDraft(open ? `draft:${userId}:call:${lead.id}` : null);
   const [time, setTime] = useState<TimeChoice>({ key: "none", at: null });
-  const [purpose, setPurpose] = useState("");
+  const [purposeText, setPurpose] = useState("");
   const [purposeTouched, setPurposeTouched] = useState(false);
   const [completeDue, setCompleteDue] = useState(true);
   const [moveStage, setMoveStage] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setOutcome(null);
     setTime({ key: "none", at: null });
     setPurposeTouched(false);
     setCompleteDue(true);
     setMoveStage(true);
     setError(null);
-  }, [open]);
-
-  useEffect(() => {
-    if (!purposeTouched) setPurpose(defaultPurpose(outcome));
-  }, [outcome, purposeTouched]);
+  });
+  const purpose = purposeTouched ? purposeText : defaultPurpose(outcome);
 
   const suggestion = outcome ? suggestedStageAfterCall(lead.stage, outcome) : null;
 

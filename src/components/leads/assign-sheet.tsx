@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { assignLeads, assignMatchingLeads } from "@/actions/leads";
 import { Avatar } from "@/components/shell/user-menu";
@@ -10,7 +10,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
 import { ROLE_LABELS } from "@/lib/domain/labels";
 import type { WorkloadRow } from "@/lib/domain/types";
-import { useRequestId } from "@/lib/hooks";
+import { useOnOpen, useRequestId } from "@/lib/hooks";
 import { cn, pluralize } from "@/lib/utils";
 import { useRunAction } from "./use-run-action";
 
@@ -40,13 +40,11 @@ export function AssignSheet({
   const [error, setError] = useState<string | null>(null);
   const count = scope.kind === "ids" ? scope.ids.length : scope.count;
 
-  useEffect(() => {
-    if (open) {
-      setOwner("");
-      setReason("");
-      setError(null);
-    }
-  }, [open]);
+  useOnOpen(open, () => {
+    setOwner("");
+    setReason("");
+    setError(null);
+  });
 
   async function save() {
     if (!owner) return setError("Choose who should own the lead.");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { updateLeadDetails } from "@/actions/leads";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
@@ -8,7 +8,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
 import { humanizeCode } from "@/lib/domain/labels";
 import type { LeadRow } from "@/lib/domain/types";
-import { useRequestId } from "@/lib/hooks";
+import { useOnOpen, useRequestId } from "@/lib/hooks";
 import { useRunAction } from "../use-run-action";
 
 type Form = {
@@ -47,14 +47,12 @@ export function EditDetailsSheet({ lead, open, onOpenChange }: { lead: LeadRow; 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      const f = fromLead(lead);
-      setForm(f);
-      setInitial(f);
-      setError(null);
-    }
-  }, [open, lead]);
+  useOnOpen(open, () => {
+    const f = fromLead(lead);
+    setForm(f);
+    setInitial(f);
+    setError(null);
+  });
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
 

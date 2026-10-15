@@ -1,7 +1,6 @@
 "use client";
 
 import { WifiOff } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getBrowserClient } from "@/lib/supabase/browser";
@@ -15,7 +14,6 @@ export function reportSessionExpired() {
 
 /** Offline banner + session-expiry prompt. Drafts stay on the device, so re-signing in loses nothing. */
 export function ConnectionWatch() {
-  const pathname = usePathname();
   const [offline, setOffline] = useState(false);
   const [expired, setExpired] = useState(false);
 
@@ -59,7 +57,9 @@ export function ConnectionWatch() {
             <Button
               className="mt-5 w-full"
               onClick={() => {
-                window.location.href = `/login?reason=expired&next=${encodeURIComponent(pathname)}`;
+                // Full page load on purpose: clears all client state kept across routes.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = `/login?reason=expired&next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
               }}
             >
               Sign in again

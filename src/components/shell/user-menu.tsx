@@ -21,7 +21,8 @@ export function Avatar({ name, className }: { name: string; className?: string }
 }
 
 export function signOutNow() {
-  // Full navigation clears any client state preserved across routes.
+  // Full page load on purpose: clears all client state kept across routes.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = "/auth/signout?reason=signed_out";
 }
 

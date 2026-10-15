@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 export function useMediaQuery(query: string, serverValue = false) {
   return useSyncExternalStore(
@@ -16,24 +16,46 @@ export function useMediaQuery(query: string, serverValue = false) {
 
 export const useIsMobile = () => useMediaQuery("(max-width: 767px)");
 
+/**
+ * Runs `onOpen` when `open` flips to true, during render (React's recommended way to reset
+ * state from a prop change — no effect, no extra paint with stale values).
+ */
+export function useOnOpen(open: boolean, onOpen: () => void) {
+  const [prev, setPrev] = useState(open);
+  if (open !== prev) {
+    setPrev(open);
+    if (open) onOpen();
+  }
+}
+
+/** Re-syncs local state from a prop when the prop changes (render-phase, no effect). */
+export function useSyncedState<T>(source: T) {
+  const [value, setValue] = useState(source);
+  const [prev, setPrev] = useState(source);
+  if (!Object.is(prev, source)) {
+    setPrev(source);
+    setValue(source);
+  }
+  return [value, setValue] as const;
+}
+
+function readStorage(key: string | null) {
+  if (!key || typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** A string draft persisted to localStorage until explicitly cleared (e.g. after a successful save). */
 export function usePersistentDraft(key: string | null) {
-  const [value, setValue] = useState("");
-  const loadedKey = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!key || loadedKey.current === key) return;
-    loadedKey.current = key;
-    try {
-      setValue(window.localStorage.getItem(key) ?? "");
-    } catch {
-      setValue("");
-    }
-  }, [key]);
+  const [state, setState] = useState(() => ({ key, value: readStorage(key) }));
+  if (state.key !== key) setState({ key, value: readStorage(key) });
 
   const update = useCallback(
     (next: string) => {
-      setValue(next);
+      setState({ key, value: next });
       if (!key) return;
       try {
         if (next) window.localStorage.setItem(key, next);
@@ -44,9 +66,8 @@ export function usePersistentDraft(key: string | null) {
     },
     [key],
   );
-
   const clear = useCallback(() => update(""), [update]);
-  return [value, update, clear] as const;
+  return [state.key === key ? state.value : readStorage(key), update, clear] as const;
 }
 
 /** Stable per-submission idempotency key; call `rotate()` after a successful save. */
@@ -56,24 +77,45 @@ export function useRequestId() {
   return [id, rotate] as const;
 }
 
+const storageEvent = (key: string) => `local-storage:${key}`;
+
+/** JSON value in localStorage, hydration-safe (server and first render use `initial`). */
 export function useLocalStorageState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(initial);
-  useEffect(() => {
+  const [initialValue] = useState(initial);
+  const raw = useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("storage", onChange);
+      window.addEventListener(storageEvent(key), onChange);
+      return () => {
+        window.removeEventListener("storage", onChange);
+        window.removeEventListener(storageEvent(key), onChange);
+      };
+    },
+    () => {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  const value = useMemo(() => {
+    if (raw === null) return initialValue;
     try {
-      const raw = window.localStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw) as T);
+      return JSON.parse(raw) as T;
     } catch {
-      // ignore
+      return initialValue;
     }
-  }, [key]);
+  }, [raw, initialValue]);
   const update = useCallback(
     (next: T) => {
-      setValue(next);
       try {
         window.localStorage.setItem(key, JSON.stringify(next));
       } catch {
         // ignore
       }
+      window.dispatchEvent(new Event(storageEvent(key)));
     },
     [key],
   );

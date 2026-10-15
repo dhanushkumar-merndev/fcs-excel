@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createFollowUp, rescheduleFollowUp } from "@/actions/leads";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
 import { formatDue } from "@/lib/domain/format";
-import { useRequestId } from "@/lib/hooks";
+import { useOnOpen, useRequestId } from "@/lib/hooks";
 import { TimePicker, type TimeChoice } from "./time-picker";
 import { useRunAction } from "./use-run-action";
 
@@ -38,14 +38,13 @@ export function FollowUpSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setTime({ key: "", at: null });
     setPurpose(reschedule?.purpose ?? "");
     setReason("");
     setAssignee(defaultAssigneeId ?? "");
     setError(null);
-  }, [open, reschedule, defaultAssigneeId]);
+  });
 
   async function save() {
     if (!time.at) return setError("Choose when to follow up.");

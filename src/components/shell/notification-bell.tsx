@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { timeAgo } from "@/lib/domain/format";
 import type { NotificationRow } from "@/lib/domain/types";
 import { getBrowserClient } from "@/lib/supabase/browser";
+import { useSyncedState } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 export function notificationIcon(type: string) {
@@ -29,7 +30,7 @@ export function notificationIcon(type: string) {
 
 export function NotificationBell({ userId, initialUnread }: { userId: string; initialUnread: number }) {
   const router = useRouter();
-  const [unread, setUnread] = useState(initialUnread);
+  const [unread, setUnread] = useSyncedState(initialUnread);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -42,7 +43,7 @@ export function NotificationBell({ userId, initialUnread }: { userId: string; in
       .select("id", { count: "exact", head: true })
       .is("read_at", null);
     if (!error && typeof count === "number") setUnread(count);
-  }, []);
+  }, [setUnread]);
 
   const loadList = useCallback(async () => {
     setLoadError(false);
@@ -55,8 +56,6 @@ export function NotificationBell({ userId, initialUnread }: { userId: string; in
     if (error) setLoadError(true);
     else setItems(data as NotificationRow[]);
   }, []);
-
-  useEffect(() => setUnread(initialUnread), [initialUnread]);
 
   useEffect(() => {
     const supabase = getBrowserClient();

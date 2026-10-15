@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Input } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
@@ -11,6 +11,7 @@ import { STAGES, stageLabel } from "@/lib/domain/stages";
 import type { WorkloadRow } from "@/lib/domain/types";
 import { filtersToParams, VIEWS, type LeadFilters, type ViewKey } from "@/lib/leads/filters";
 import type { FilterOptions } from "@/lib/leads/queries";
+import { useOnOpen } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 const FOLLOW_UP_OPTIONS = [
@@ -127,9 +128,7 @@ export function FiltersSheet({
   onApply: (params: URLSearchParams) => void;
 }) {
   const [draft, setDraft] = useState<LeadFilters>(filters);
-  useEffect(() => {
-    if (open) setDraft(filters);
-  }, [open, filters]);
+  useOnOpen(open, () => setDraft(filters));
   const set = (patch: Partial<LeadFilters>) => setDraft((d) => ({ ...d, ...patch }));
 
   return (

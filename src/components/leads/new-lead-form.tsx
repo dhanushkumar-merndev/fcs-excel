@@ -41,18 +41,17 @@ export function NewLeadForm({ workload }: { workload: WorkloadRow[] }) {
   const [saving, setSaving] = useState(false);
   const set = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
+  const phoneLongEnough = form.phone.replace(/\D/g, "").length >= 10;
   useEffect(() => {
+    if (!phoneLongEnough) return;
     const phone = form.phone.trim();
-    if (phone.replace(/\D/g, "").length < 10) {
-      setMatches([]);
-      return;
-    }
     const t = window.setTimeout(async () => {
       const result = await findLeadsByPhone(phone);
       if (result.ok) setMatches(result.data.matches);
     }, 400);
     return () => window.clearTimeout(t);
-  }, [form.phone]);
+  }, [form.phone, phoneLongEnough]);
+  const visibleMatches = phoneLongEnough ? matches : [];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -94,11 +93,11 @@ export function NewLeadForm({ workload }: { workload: WorkloadRow[] }) {
             <Input id="nl-phone" type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={(e) => set("phone", e.target.value)} aria-invalid={Boolean(errors.phone) || undefined} />
           </Field>
 
-          {matches.length ? (
-            <InlineAlert tone="warning" className="sm:col-span-2" title={`This number already has ${matches.length} enquir${matches.length === 1 ? "y" : "ies"}`}>
+          {visibleMatches.length ? (
+            <InlineAlert tone="warning" className="sm:col-span-2" title={`This number already has ${visibleMatches.length} enquir${visibleMatches.length === 1 ? "y" : "ies"}`}>
               <p className="mb-2">Saving creates a separate event enquiry. The existing ones stay unchanged.</p>
               <ul className="flex flex-col gap-1.5">
-                {matches.map((m) => (
+                {visibleMatches.map((m) => (
                   <li key={m.id} className="flex flex-wrap items-center gap-2">
                     <Link href={`/leads/${m.id}`} target="_blank" className="font-medium underline underline-offset-2">
                       L-{m.lead_number} · {m.customer_name}

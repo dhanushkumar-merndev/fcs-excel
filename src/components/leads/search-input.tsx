@@ -1,16 +1,15 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useSyncedState } from "@/lib/hooks";
 
 /** Debounced search that writes to the URL; Enter searches immediately. */
 export function SearchInput({ defaultValue, onSearch }: { defaultValue: string; onSearch: (q: string) => void }) {
-  const [value, setValue] = useState(defaultValue);
+  const [value, setValue] = useSyncedState(defaultValue);
   const timer = useRef<number | undefined>(undefined);
   const last = useRef(defaultValue);
-
   useEffect(() => {
-    setValue(defaultValue);
     last.current = defaultValue;
   }, [defaultValue]);
 

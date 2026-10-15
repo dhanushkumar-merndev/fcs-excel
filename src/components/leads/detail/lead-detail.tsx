@@ -16,7 +16,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { PageContainer } from "@/components/shell/page";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -51,7 +51,7 @@ export function LeadDetailView(props: Props) {
 const TABS = ["activity", "notes", "follow-ups", "source", "related"] as const;
 type Tab = (typeof TABS)[number];
 
-function Detail({ detail, staff, settings, workload, manager }: Props & { manager: boolean }) {
+function Detail({ detail, staff, settings, manager }: Props & { manager: boolean }) {
   const { lead, followUps, notes, events, related, importInfo } = detail;
   const actions = useLeadActions();
   const [tab, setTab] = useState<Tab>("activity");
@@ -60,10 +60,8 @@ function Detail({ detail, staff, settings, workload, manager }: Props & { manage
 
   const pending = followUps.filter((f) => f.status === "pending");
   const nextFollowUp = pending[0] ?? null;
-  const dueFollowUp = useMemo(() => {
-    const due = pending.find((f) => followUpState(f.due_at) !== "upcoming");
-    return due ? { id: due.id, purpose: due.purpose, due_at: due.due_at } : null;
-  }, [pending]);
+  const due = pending.find((f) => followUpState(f.due_at) !== "upcoming");
+  const dueFollowUp = due ? { id: due.id, purpose: due.purpose, due_at: due.due_at } : null;
   const latestNote = notes[0] ?? null;
   const callTarget = { id: lead.id, customer_name: lead.customer_name, stage: lead.stage, version: lead.version, dueFollowUp };
   const tabLabels: Record<Tab, string> = {

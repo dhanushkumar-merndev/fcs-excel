@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { changeStage, updateLeadDetails } from "@/actions/leads";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
 import { STAGES, isClosedStage, requiresReason, stageLabel } from "@/lib/domain/stages";
-import { useRequestId } from "@/lib/hooks";
+import { useOnOpen, useRequestId } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { StageBadge } from "./badges";
 import { useRunAction } from "./use-run-action";
@@ -38,15 +38,14 @@ export function StageSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setStage(lead.stage);
     setReasonChoice("");
     setReasonText("");
     setPendingAction("");
     setBookingValue("");
     setError(null);
-  }, [open, lead.stage]);
+  });
 
   const closing = isClosedStage(stage) && stage !== lead.stage;
   const reopening = isClosedStage(lead.stage) && !isClosedStage(stage);
