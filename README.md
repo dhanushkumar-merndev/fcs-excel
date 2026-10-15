@@ -14,7 +14,7 @@ Requirements: Node 22+, pnpm 11.
    ```bash
    pnpm install
    ```
-2. Create `.env` with the tooling variables. These are used only by the scripts, never by the app.
+2. Create `.env` with the tooling variables. These are used only by the scripts, never by the app. `.env.example` lists every variable, including the app ones that `pnpm env:pull` writes for you.
    ```bash
    ACCESS_TOKEN=sbp_…                         # Supabase personal access token
    SUPABASE_PROJECT_REF=ijletxnxnsepuxemjtlk   # live project
