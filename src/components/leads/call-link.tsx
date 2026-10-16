@@ -88,11 +88,18 @@ export function CallLink({
   );
 }
 
-export function CopyPhoneButton({ phone, className }: { phone: string; className?: string }) {
+export function CopyPhoneButton({ phone, className, compact }: { phone: string; className?: string; compact?: boolean }) {
   return (
     <button
       type="button"
-      className={cn(buttonVariants({ variant: "secondary", size: "md" }), className)}
+      aria-label={compact ? "Copy number" : undefined}
+      title={compact ? "Copy number" : undefined}
+      className={cn(
+        compact
+          ? "inline-flex size-7 items-center justify-center rounded-full text-fg-subtle hover:bg-hover hover:text-fg [&_svg]:size-3.5"
+          : buttonVariants({ variant: "secondary", size: "md" }),
+        className,
+      )}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(phone);
@@ -102,7 +109,8 @@ export function CopyPhoneButton({ phone, className }: { phone: string; className
         }
       }}
     >
-      <Copy /> Copy number
+      <Copy />
+      {compact ? null : " Copy number"}
     </button>
   );
 }

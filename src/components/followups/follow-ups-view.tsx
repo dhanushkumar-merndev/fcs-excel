@@ -68,7 +68,7 @@ function View({ tab, person, manager, items, counts, workload }: Parameters<type
   };
 
   return (
-    <PageContainer className="max-w-4xl">
+    <PageContainer>
       <PageHeader
         title="Follow-ups"
         description="Times shown in IST. Overdue items stay here until they're done, rescheduled or cancelled."

@@ -177,7 +177,7 @@ export function ReportView({
         </Link>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card className="lg:col-span-2">
           <CardHeader title="Lead volume by day" description="By original lead creation date (IST). Click a day to open its leads." />
           <CardBody>
@@ -341,7 +341,7 @@ export function ReportView({
         <StatCard label="Marked booked" value={a.booked_in_period} href={activity("booked")} tone="green" />
         <StatCard label="Follow-ups scheduled" value={a.follow_ups_created} href="/follow-ups?tab=upcoming" />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader title="Logged call outcomes" description="Calls recorded with an outcome. Bar = calls; leads alongside." />
           <CardBody>

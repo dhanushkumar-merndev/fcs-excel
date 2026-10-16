@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  ArrowRightLeft,
   CalendarClock,
   CalendarDays,
   ChevronDown,
@@ -75,7 +76,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
   const openLogCall = (prompted = false) => actions.logCall(callTarget, { prompted });
 
   return (
-    <PageContainer className="max-w-6xl pb-28 md:pb-0">
+    <PageContainer className="pb-28 md:pb-0">
       <Link href="/leads" className="mb-3 inline-flex items-center gap-1.5 text-sm text-fg-muted hover:text-fg">
         <ArrowLeft className="size-4" /> Leads
       </Link>
@@ -97,30 +98,30 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
             <PriorityMark priority={lead.priority} />
           </div>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
-            <a href={`tel:${lead.phone_e164}`} className="tabular font-medium text-fg hover:underline">
-              {formatPhone(lead.phone_e164)}
-            </a>
+            <span className="inline-flex items-center gap-0.5">
+              <a href={`tel:${lead.phone_e164}`} className="tabular font-medium text-fg hover:underline">
+                {formatPhone(lead.phone_e164)}
+              </a>
+              <CopyPhoneButton phone={lead.phone_e164} compact />
+            </span>
             <span className="tabular">L-{lead.lead_number}</span>
-            <span>
-              Owner:{" "}
+            <span className="inline-flex items-center gap-1.5">
+              Owner: <span className="font-medium text-fg">{lead.owner?.full_name ?? "Unassigned"}</span>
               {manager ? (
                 <button
                   type="button"
-                  className="font-medium text-fg underline-offset-4 hover:underline"
                   onClick={() => actions.assign({ kind: "ids", ids: [lead.id], currentOwnerId: lead.owner_id })}
+                  className="inline-flex h-7 items-center gap-1 rounded-full border border-line px-2.5 text-[13px] font-medium text-fg hover:bg-hover"
                 >
-                  {lead.owner?.full_name ?? "Unassigned"}
+                  <UserPlus className="size-3.5" /> {lead.owner_id ? "Change" : "Assign"}
                 </button>
-              ) : (
-                <span className="font-medium text-fg">{lead.owner?.full_name ?? "Unassigned"}</span>
-              )}
+              ) : null}
             </span>
           </p>
           {lead.closed_reason ? <p className="mt-1 text-[13px] text-fg-muted">Reason: {lead.closed_reason}</p> : null}
         </div>
-        <div className="hidden flex-wrap gap-2 md:flex lg:max-w-[460px] lg:justify-end">
+        <div className="hidden flex-wrap gap-2 md:flex lg:shrink-0 lg:flex-nowrap lg:justify-end">
           <CallLink leadId={lead.id} phone={lead.phone_e164} onReturn={() => openLogCall(true)} />
-          <CopyPhoneButton phone={lead.phone_e164} />
           <Button variant="secondary" onClick={() => openLogCall()}>
             <PhoneCall /> Log call
           </Button>
@@ -131,13 +132,8 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
             <CalendarClock /> Follow-up
           </Button>
           <Button variant="secondary" onClick={() => setStageOpen(true)}>
-            Update stage
+            <ArrowRightLeft /> Stage
           </Button>
-          {manager ? (
-            <Button variant="ghost" onClick={() => actions.assign({ kind: "ids", ids: [lead.id], currentOwnerId: lead.owner_id })}>
-              <UserPlus /> Assign
-            </Button>
-          ) : null}
         </div>
       </header>
 
@@ -151,7 +147,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
         </InlineAlert>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-4">
           {/* What to do next */}
           <Card className="grid gap-px overflow-hidden bg-line sm:grid-cols-2">
@@ -200,7 +196,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
                 <Pencil /> Edit details
               </Button>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-6">
               <Fact icon={<PartyPopper />} label="Occasion" value={humanizeCode(lead.occasion_code)} />
               <Fact icon={<UtensilsCrossed />} label="Menu" value={humanizeCode(lead.menu_code)} />
               <Fact icon={<Users />} label="Guests" value={guestRangeLabel(lead.guest_range)} />

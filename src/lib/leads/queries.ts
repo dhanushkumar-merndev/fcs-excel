@@ -72,7 +72,7 @@ export type LeadDetail = {
   notes: (NoteRow & { author: { full_name: string } | null; revisions: { count: number }[] })[];
   events: (LeadEventRow & { actor: { full_name: string } | null })[];
   related: Pick<LeadWithOwner, "id" | "lead_number" | "customer_name" | "event_date" | "stage" | "occasion_code" | "acquired_at" | "owner">[];
-  importInfo: { id: string; file_name: string; created_at: string } | null;
+  importInfo: { id: string; file_name: string; sheet_name: string | null; created_at: string } | null;
 };
 
 export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
@@ -112,7 +112,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
       .order("acquired_at", { ascending: false })
       .limit(20),
     lead.import_batch_id
-      ? supabase.from("import_batches").select("id, file_name, created_at").eq("id", lead.import_batch_id).maybeSingle()
+      ? supabase.from("import_batches").select("id, file_name, sheet_name, created_at").eq("id", lead.import_batch_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 

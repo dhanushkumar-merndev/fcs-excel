@@ -3,11 +3,11 @@ import { Skeleton } from "@/components/ui/card";
 
 export function LeadDetailSkeleton() {
   return (
-    <PageContainer className="max-w-6xl">
+    <PageContainer>
       <Skeleton className="mb-4 h-5 w-20" />
       <Skeleton className="mb-2 h-8 w-64" />
       <Skeleton className="mb-6 h-5 w-48" />
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px] 2xl:grid-cols-[1fr_400px]">
         <div className="flex flex-col gap-4">
           <Skeleton className="h-20 w-full rounded-2xl" />
           <Skeleton className="h-44 w-full rounded-2xl" />

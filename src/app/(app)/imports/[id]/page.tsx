@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/card";
 import { PermissionDenied } from "@/components/ui/states";
 import { getCurrentStaff } from "@/lib/auth/dal";
 import { formatDateTime } from "@/lib/domain/format";
+import { importName } from "@/lib/domain/labels";
 import { can } from "@/lib/domain/permissions";
 import type { ImportBatchRow } from "@/lib/domain/types";
 import { createClient } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ const PAGE_SIZE = 100;
 
 export default function ImportPage(props: PageProps<"/imports/[id]">) {
   return (
-    <PageContainer className="max-w-6xl">
+    <PageContainer>
       <Suspense fallback={<Skeleton className="h-[480px] w-full rounded-2xl" />}>
         <Content {...props} />
       </Suspense>
@@ -70,12 +71,12 @@ async function Content({ params, searchParams }: PageProps<"/imports/[id]">) {
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-[22px] font-semibold tracking-tight md:text-2xl">{b.file_name}</h1>
+            <h1 className="truncate text-[22px] font-semibold tracking-tight md:text-2xl">{importName(b.file_name, b.sheet_name).title}</h1>
             <ImportStatusBadge batch={b} />
           </div>
           <p className="mt-1 text-sm text-fg-muted">
+            {importName(b.file_name, b.sheet_name).file ? `${importName(b.file_name, b.sheet_name).file} · ` : ""}
             {b.uploader?.full_name ?? "Someone"} · {formatDateTime(b.created_at)}
-            {b.sheet_name ? ` · sheet “${b.sheet_name}”` : ""}
             {b.owner ? ` · assigned to ${b.owner.full_name}` : " · unassigned"}
             {b.event_year_choice?.mode === "fixed" ? ` · year ${b.event_year_choice.year} for dates without a year` : ""}
             {b.event_year_choice?.mode === "after_created" ? " · yearless dates → next date after creation" : ""}

@@ -106,3 +106,12 @@ export const ROLE_LABELS: Record<string, string> = {
   manager: "Manager",
   salesperson: "Salesperson",
 };
+
+/**
+ * How an import is named: the worksheet when it's meaningful ("CHEF ON DEMAND"), with the file as
+ * context; just the file for CSVs and default sheet names. Mirrors private.import_label in SQL.
+ */
+export function importName(fileName: string, sheetName?: string | null): { title: string; file: string | null } {
+  const sheet = sheetName?.trim();
+  return sheet && !/^(csv|sheet ?\d*)$/i.test(sheet) ? { title: sheet, file: fileName } : { title: fileName, file: null };
+}

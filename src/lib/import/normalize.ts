@@ -57,6 +57,8 @@ export type NormalizedRow = {
 /** Stored when a row has a phone but no name; flagged "Name missing" for review. */
 export const NAME_PLACEHOLDER = "Name not given";
 
+const META_NO_PERMISSION = /have enough permission/i;
+
 const EVENT_KEYS: TemplateKey[] = ["occasion", "guests", "menu", "event_date", "event_address"];
 
 /** "row 27", or "CHEF ON DEMAND · row 27" when several sheets are previewed together. */
@@ -129,7 +131,18 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
     flags.add("external_id_damaged");
     issues.push({ field: "id", severity: "warning", code: "id_damaged", message: leadId.message ?? "ID damaged." });
   }
+  // When the exporter can't see the ad account, Meta fills ad/ad set/campaign columns with
+  // "You don't have enough permission(s)…". That's not a name or ID, so those fields stay blank.
+  const hidden: string[] = [];
+  const metaHidden = (key: TemplateKey) => {
+    const value = cellText(get(key));
+    if (!META_NO_PERMISSION.test(value)) return false;
+    hidden.push(TEMPLATE_COLUMNS.find((c) => c.key === key)?.label.toLowerCase() ?? key);
+    return true;
+  };
+  const nameField = (key: TemplateKey) => (metaHidden(key) ? null : text(get(key)));
   const idField = (key: TemplateKey) => {
+    if (metaHidden(key)) return null;
     const result = normalizeId(get(key));
     if (result.damaged) {
       issues.push({ field: key, severity: "warning", code: "id_damaged", message: result.message ?? "ID damaged." });
@@ -274,13 +287,13 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
     source_fingerprint: fingerprint,
     source_created_at: created.iso,
     ad_id: idField("ad_id"),
-    ad_name: text(get("ad_name")),
+    ad_name: nameField("ad_name"),
     adset_id: idField("adset_id"),
-    adset_name: text(get("adset_name")),
+    adset_name: nameField("adset_name"),
     campaign_id: idField("campaign_id"),
-    campaign_name: text(get("campaign_name")),
+    campaign_name: nameField("campaign_name"),
     form_id: idField("form_id"),
-    form_name: text(get("form_name")),
+    form_name: nameField("form_name"),
     is_organic: organic.value,
     platform: text(get("platform"))?.toLowerCase() ?? null,
     occasion_code: occasion,
@@ -294,6 +307,15 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
     legacy_crm_update: text(get("crm_update")),
     review_flags: [...flags],
   };
+
+  if (hidden.length) {
+    issues.push({
+      field: "ads",
+      severity: "info",
+      code: "meta_no_permission",
+      message: `Meta hid the ${hidden.join(", ")} (the export had no access to the ad account) — left blank.`,
+    });
+  }
 
   return {
     rowNumber: row.rowNumber,

@@ -61,7 +61,7 @@ function Queue({ title, items, counts }: Parameters<typeof ContactQueue>[0]) {
   const next = items[0];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <h1 className="text-[22px] font-semibold tracking-tight md:text-2xl">{title}</h1>
       <p className="mt-1 text-sm text-fg-muted">{next ? "Here's who to contact next." : "You're all caught up."}</p>
 

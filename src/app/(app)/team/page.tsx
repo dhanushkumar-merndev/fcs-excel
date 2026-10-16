@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Team" };
 
 export default function TeamPage() {
   return (
-    <PageContainer className="max-w-5xl">
+    <PageContainer>
       <Suspense fallback={<Skeleton className="h-96 w-full rounded-2xl" />}>
         <Content />
       </Suspense>

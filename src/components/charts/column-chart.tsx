@@ -110,12 +110,15 @@ export function ColumnChart({ points, ariaLabel, unit = "leads" }: { points: Col
                 </div>
               ) : null}
             </div>
-            <div className="mt-1.5 flex gap-[2px] text-[11px] text-fg-subtle" aria-hidden>
-              {points.map((p, i) => (
-                <span key={p.key} className="flex-1 truncate text-center">
-                  {i % labelEvery === 0 ? p.shortLabel : ""}
-                </span>
-              ))}
+            {/* Labels sit centred under their column and may be wider than it, so they never clip. */}
+            <div className="relative mt-1.5 h-4 text-[11px] text-fg-subtle" aria-hidden>
+              {points.map((p, i) =>
+                i % labelEvery === 0 ? (
+                  <span key={p.key} className="absolute top-0 -translate-x-1/2 whitespace-nowrap" style={{ left: `${((i + 0.5) / points.length) * 100}%` }}>
+                    {p.shortLabel}
+                  </span>
+                ) : null,
+              )}
             </div>
           </div>
         </div>

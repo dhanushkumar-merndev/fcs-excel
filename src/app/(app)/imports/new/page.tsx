@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Import leads" };
 
 export default function NewImportPage() {
   return (
-    <PageContainer className="max-w-5xl">
+    <PageContainer>
       <Suspense fallback={<Skeleton className="h-[520px] w-full rounded-2xl" />}>
         <Content />
       </Suspense>

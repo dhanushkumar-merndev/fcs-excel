@@ -6,6 +6,7 @@ import { Avatar } from "@/components/shell/user-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { addDays, formatDateTime, todayIST } from "@/lib/domain/format";
+import { importName } from "@/lib/domain/labels";
 import { OPEN_STAGES, STAGES, stageLabel } from "@/lib/domain/stages";
 import type { ImportBatchRow, Staff, WorkloadRow } from "@/lib/domain/types";
 import { leadsHref } from "@/lib/leads/filters";
@@ -21,7 +22,7 @@ export async function ManagerDashboard({ staff }: { staff: Staff }) {
     getWorkload(),
     supabase
       .from("import_batches")
-      .select("id, file_name, created_at, status, created_count, skipped_count, invalid_count, failed_count, pending_count, review_count, last_heartbeat_at, uploader:profiles!import_batches_uploaded_by_fkey(full_name)")
+      .select("id, file_name, sheet_name, created_at, status, created_count, skipped_count, invalid_count, failed_count, pending_count, review_count, last_heartbeat_at, uploader:profiles!import_batches_uploaded_by_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
@@ -60,7 +61,7 @@ export async function ManagerDashboard({ staff }: { staff: Staff }) {
         <StatCard label="Needs review" value={s.needs_review ?? 0} href="/leads?view=needs_review" tone="amber" hint="Date or details" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader title="Active enquiries by stage" description={`${(s.open ?? 0).toLocaleString("en-IN")} open enquiries`} />
           <CardBody>
@@ -112,8 +113,9 @@ export async function ManagerDashboard({ staff }: { staff: Staff }) {
                     <li key={b.id}>
                       <Link href={`/imports/${b.id}`} className="flex flex-col gap-1 py-2.5 hover:opacity-80 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">{b.file_name}</span>
+                          <span className="block truncate text-sm font-medium">{importName(b.file_name, b.sheet_name).title}</span>
                           <span className="text-xs text-fg-subtle">
+                            {importName(b.file_name, b.sheet_name).file ? `${importName(b.file_name, b.sheet_name).file} · ` : ""}
                             {b.uploader?.full_name ?? "Someone"} · {formatDateTime(b.created_at)}
                           </span>
                         </span>

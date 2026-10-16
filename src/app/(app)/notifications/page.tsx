@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Notifications" };
 
 export default function NotificationsPage() {
   return (
-    <PageContainer className="max-w-3xl">
+    <PageContainer>
       <PageHeader title="Notifications" description="Assignments, follow-up reminders and import results. Unread items stay until you open them." />
       <Suspense fallback={<Skeleton className="h-96 w-full rounded-2xl" />}>
         <Content />

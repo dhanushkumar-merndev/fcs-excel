@@ -183,6 +183,23 @@ describe("row normalization", () => {
     expect(row.lead.review_flags).not.toContain("date_needs_review");
   });
 
+  it("blanks Meta's no-permission placeholders in ad and campaign columns", () => {
+    const r = normalizeRow(
+      templateRow(6, {
+        ...base,
+        campaign_name: s("You don't have enough permissions. Please refer to this help page: https://www.facebook.com/business/help/1"),
+        ad_id: s("ag:You don't have enough permission. Please refer to this help: https://www.facebook.com/business/help/1"),
+      }),
+      mapping,
+      { mode: "unresolved" },
+    );
+    expect(r.valid).toBe(true);
+    expect(r.lead.campaign_name).toBeNull();
+    expect(r.lead.ad_id).toBeNull();
+    expect(r.issues.find((i) => i.code === "meta_no_permission")?.message).toMatch(/campaign name.*left blank|ad id.*left blank/);
+    expect(r.original.campaign_name).toMatch(/^You don't have enough permissions/);
+  });
+
   it("rejects rows only for a missing or wrong phone; a missing name is imported and flagged", () => {
     const nameless = normalizeRow(templateRow(3, { ...base, full_name: s(" ") }), mapping, { mode: "unresolved" });
     expect(nameless.valid).toBe(true);

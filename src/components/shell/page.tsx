@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export function PageContainer({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("mx-auto w-full max-w-[1400px] px-4 pt-4 md:px-6 md:pt-2", className)}>{children}</div>;
+  return <div className={cn("w-full px-4 pt-4 md:px-6 md:pt-2 2xl:px-8", className)}>{children}</div>;
 }
 
 export function PageHeader({

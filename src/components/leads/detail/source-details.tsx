@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/domain/format";
-import { platformLabel } from "@/lib/domain/labels";
+import { importName, platformLabel } from "@/lib/domain/labels";
 import type { LeadRow } from "@/lib/domain/types";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -16,7 +16,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 const mono = (v: string | null) => (v ? <span className="font-mono text-[13px] select-all">{v}</span> : null);
 
-export function SourceDetails({ lead, importInfo }: { lead: LeadRow; importInfo: { id: string; file_name: string; created_at: string } | null }) {
+export function SourceDetails({ lead, importInfo }: { lead: LeadRow; importInfo: { id: string; file_name: string; sheet_name: string | null; created_at: string } | null }) {
   const raw = (lead.source_raw ?? null) as Record<string, string> | null;
   return (
     <div className="flex flex-col gap-5">
@@ -28,7 +28,9 @@ export function SourceDetails({ lead, importInfo }: { lead: LeadRow; importInfo:
         {importInfo ? (
           <Row label="Import">
             <Link className="underline underline-offset-2" href={`/imports/${importInfo.id}`}>
-              {importInfo.file_name}
+              {importName(importInfo.file_name, importInfo.sheet_name).file
+                ? `${importName(importInfo.file_name, importInfo.sheet_name).title} · ${importInfo.file_name}`
+                : importInfo.file_name}
             </Link>
             {lead.import_row_number ? ` · row ${lead.import_row_number}` : ""}
           </Row>

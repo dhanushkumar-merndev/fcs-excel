@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/card";
 import { EmptyState, PermissionDenied } from "@/components/ui/states";
 import { getCurrentStaff } from "@/lib/auth/dal";
 import { formatDateTime } from "@/lib/domain/format";
+import { importName } from "@/lib/domain/labels";
 import { can } from "@/lib/domain/permissions";
 import type { ImportBatchRow } from "@/lib/domain/types";
 import { createClient } from "@/lib/supabase/server";
@@ -17,7 +18,7 @@ export const metadata: Metadata = { title: "Imports" };
 
 export default function ImportsPage() {
   return (
-    <PageContainer className="max-w-5xl">
+    <PageContainer>
       <PageHeader
         title="Imports"
         description="Every upload with who imported it, when, and what happened to each row."
@@ -79,9 +80,10 @@ async function History() {
               <div className="min-w-0">
                 <p className="flex items-center gap-2 truncate font-medium">
                   <FileSpreadsheet className="size-4 shrink-0 text-fg-muted" />
-                  <span className="truncate">{b.file_name}</span>
+                  <span className="truncate">{importName(b.file_name, b.sheet_name).title}</span>
                 </p>
                 <p className="mt-0.5 text-[13px] text-fg-muted">
+                  {importName(b.file_name, b.sheet_name).file ? `${importName(b.file_name, b.sheet_name).file} · ` : ""}
                   {b.uploader?.full_name ?? "Someone"} · {formatDateTime(b.created_at)}
                   {b.owner ? ` · assigned to ${b.owner.full_name}` : ""}
                 </p>
