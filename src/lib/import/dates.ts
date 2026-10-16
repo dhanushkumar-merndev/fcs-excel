@@ -15,6 +15,45 @@ const MONTHS: Record<string, number> = {
   oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
 };
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FULL_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function editDistance(a: string, b: string) {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length];
+}
+
+/** Month number for a name or abbreviation, tolerating small typos ("septmber", "desember"). */
+export function monthOf(word: string): number | undefined {
+  const w = word.toLowerCase().replace(/\.$/, "");
+  if (MONTHS[w]) return MONTHS[w];
+  if (w.length < 5) return undefined;
+  const limit = w.length >= 7 ? 2 : 1;
+  const hits = FULL_MONTHS.flatMap((name, i) => (name[0] === w[0] && editDistance(w, name) <= limit ? [i + 1] : []));
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/** Tidies common typing quirks: "11 th" → "11th", "17 /10/26" → "17/10/26", "7septmber" → "7 septmber". */
+function tidy(raw: string) {
+  return raw
+    .toLowerCase()
+    .replace(/,/g, " ")
+    .replace(/(^|[^a-z])0ct\b/g, "$1oct")
+    .replace(/\s+/g, " ")
+    .replace(/(\d)\s+(st|nd|rd|th)\b/g, "$1$2")
+    .replace(/(\d)\s*([\/.\-])\s*(?=\d)/g, "$1$2")
+    .replace(/(\d)(?!(?:st|nd|rd|th)\b)([a-z])/g, "$1 $2")
+    .replace(/([a-z])(\d)/g, "$1 $2")
+    .trim();
+}
 
 export function daysInMonth(year: number, month: number) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -65,7 +104,7 @@ export function parseEventDate(cell: RawCell | undefined): EventDateResult {
     return { kind: "invalid", raw, reason: "A plain number isn't a date." };
   }
 
-  const text = raw.toLowerCase().replace(/\s+/g, " ").replace(/,/g, " ").trim();
+  const text = tidy(raw);
 
   // ISO: 2026-10-29 (optionally with time)
   let m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ t].*)?$/);
@@ -90,6 +129,16 @@ export function parseEventDate(cell: RawCell | undefined): EventDateResult {
     return { kind: "invalid", raw, reason: "This date doesn't exist on the calendar." };
   }
 
+  // Day and month without a year: 22/9, 22-09 (day first, as written in India).
+  m = text.match(/^(\d{1,2})[\/.\-](\d{1,2})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a <= 12 && b <= 12 && a !== b) return { kind: "invalid", raw, reason: "Could be day/month or month/day, and has no year." };
+    const [day, month] = b <= 12 ? [a, b] : [b, a];
+    if (month < 1 || month > 12 || day < 1 || day > maxDays(month)) return { kind: "invalid", raw, reason: "This date doesn't exist on the calendar." };
+    return { kind: "yearless", day, month, raw };
+  }
+
   // Day-first with month name: 29 October, 25 nov, 31st oct 2026, 29-Oct-2026
   m = text.match(/^(\d{1,2})(?:st|nd|rd|th)?[ \-\/.]*([a-z]+)\.?(?:[ \-\/.]+(\d{2}|\d{4}))?$/);
   if (!m) {
@@ -99,7 +148,7 @@ export function parseEventDate(cell: RawCell | undefined): EventDateResult {
   }
   if (m) {
     const day = Number(m[1]);
-    const month = MONTHS[m[2]];
+    const month = monthOf(m[2]);
     if (!month) return { kind: "invalid", raw, reason: `"${m[2]}" isn't a month name.` };
     if (day < 1 || day > maxDays(month)) {
       return { kind: "invalid", raw, reason: `${day} ${MONTH_NAMES[month - 1]} doesn't exist.` };
@@ -113,7 +162,59 @@ export function parseEventDate(cell: RawCell | undefined): EventDateResult {
     return { kind: "yearless", day, month, raw };
   }
 
-  return { kind: "invalid", raw, reason: "Couldn't read this as a date." };
+  return findDateInText(text, raw) ?? { kind: "invalid", raw, reason: "Couldn't read this as a date." };
+}
+
+const DAY = "(\\d{1,2})(?:st|nd|rd|th)?";
+const MORE_DAYS = "(?:\\s*(?:-|to|&|and|or|\\/)\\s*\\d{1,2}(?:st|nd|rd|th)?)*";
+const YEAR = "(?:\\s+(\\d{4}|\\d{2})\\b)?";
+const IN_TEXT_NUMERIC = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})\b/;
+const IN_TEXT_DAY_MONTH = new RegExp(`\\b${DAY}${MORE_DAYS}\\s*(?:of\\s+)?([a-z]{3,})\\b\\.?${YEAR}`);
+const IN_TEXT_MONTH_DAY = new RegExp(`\\b([a-z]{3,})\\.?\\s*${DAY}\\b${YEAR}`);
+
+/**
+ * A date written inside other text: "6th nov - approximately 30 people", "17 to 20 oct",
+ * "october 10 dinner", "jain food … 23/24 september". The first clear date is used and a note says
+ * so; the full original text stays on the lead.
+ */
+function findDateInText(text: string, raw: string): EventDateResult | null {
+  const note = `Read the date written in “${raw.replace(/\s+/g, " ").trim()}”.`;
+  const numeric = text.match(IN_TEXT_NUMERIC);
+  if (numeric) {
+    const inner = parseEventDate({ t: "s", v: `${numeric[1]}/${numeric[2]}/${numeric[3]}` });
+    if (inner.kind === "date") return { ...inner, raw, note };
+    if (inner.kind === "ambiguous") return { ...inner, raw };
+  }
+  for (const [pattern, dayIndex, monthIndex] of [
+    [IN_TEXT_DAY_MONTH, 1, 2],
+    [IN_TEXT_MONTH_DAY, 2, 1],
+  ] as const) {
+    const m = text.match(pattern);
+    const month = m ? monthOf(m[monthIndex]) : undefined;
+    if (!m || !month) continue;
+    const day = Number(m[dayIndex]);
+    if (day < 1 || day > maxDays(month)) continue;
+    if (m[3]) {
+      const y = expandYear(m[3]);
+      if (validDate(y, month, day)) return { kind: "date", date: iso(y, month, day), raw, note };
+      continue;
+    }
+    return { kind: "yearless", day, month, raw };
+  }
+  return null;
+}
+
+/**
+ * DD/MM vs MM/DD: an enquiry is for an upcoming event, so when exactly one reading falls between
+ * the lead's creation day and a year after it, that reading is used. Otherwise it stays ambiguous.
+ */
+export function resolveAmbiguous(options: [string, string], createdAt: string | null): string | null {
+  if (!createdAt) return null;
+  const created = new Date(new Date(createdAt).getTime() + 330 * 60_000);
+  const from = created.toISOString().slice(0, 10);
+  const to = new Date(created.getTime() + 366 * 86_400_000).toISOString().slice(0, 10);
+  const plausible = options.filter((d) => d >= from && d <= to);
+  return plausible.length === 1 ? plausible[0] : null;
 }
 
 /** Applies an explicit year choice to a yearless date. Returns null when unresolved or impossible. */

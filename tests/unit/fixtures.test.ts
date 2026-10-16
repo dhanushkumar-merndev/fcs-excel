@@ -30,11 +30,14 @@ describe("fixture files", () => {
     expect(rows[0].lead.phone_e164).toBe("+919100000000");
     expect(rows[0].lead.campaign_id).toMatch(/^c:1202110000000001\d\d$/);
     expect(rows.every((r) => r.valid)).toBe(true);
-    // DD/MM dates with day <= 12 are ambiguous and flagged, never guessed; everything else resolves.
+    // DD/MM dates with day <= 12 are ambiguous: settled only when exactly one reading falls in the year
+    // after the enquiry (and then noted), otherwise flagged. Everything else resolves.
     for (const r of rows) {
       const raw = r.lead.event_date_raw ?? "";
       const ambiguous = /^(\d{2})\/(\d{2})\/\d{4}$/.test(raw) && Number(raw.slice(0, 2)) <= 12 && raw.slice(0, 2) !== raw.slice(3, 5);
-      expect(r.lead.event_date_status, raw).toBe(ambiguous ? "needs_review" : "confirmed");
+      const settled = r.issues.some((i) => i.code === "date_disambiguated");
+      expect(r.lead.event_date_status, raw).toBe(ambiguous && !settled ? "needs_review" : "confirmed");
+      if (settled) expect(ambiguous, raw).toBe(true);
     }
   });
 

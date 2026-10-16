@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawCell, RawRow } from "@/lib/import/cells";
-import { parseCreatedTime, parseEventDate, resolveYearless } from "@/lib/import/dates";
+import { parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless } from "@/lib/import/dates";
 import { reviewDuplicates, type ExistingLead } from "@/lib/import/duplicates";
 import { normalizeId } from "@/lib/import/ids";
 import { normalizeRow, parseBoolean } from "@/lib/import/normalize";
@@ -226,5 +226,42 @@ describe("duplicates", () => {
     const rows = [norm(2, { id: s("l:7"), phone: s("") }), norm(3, { id: s("l:8"), phone: s("") })];
     const review = reviewDuplicates(rows, []);
     expect(review.get(3)!.warnings).toHaveLength(0);
+  });
+});
+
+describe("messy event dates from real lead forms", () => {
+  const d = (v: string) => parseEventDate(s(v));
+  it("reads ordinals with spaces, typos and glued text", () => {
+    expect(d("11 th November")).toMatchObject({ kind: "yearless", day: 11, month: 11 });
+    expect(d("October 21 st")).toMatchObject({ kind: "yearless", day: 21, month: 10 });
+    expect(d("9 th sep 2026")).toMatchObject({ kind: "date", date: "2026-09-09" });
+    expect(d("7septmber")).toMatchObject({ kind: "yearless", day: 7, month: 9 });
+    expect(d("Desember 24")).toMatchObject({ kind: "yearless", day: 24, month: 12 });
+    expect(d("17 /10/26")).toMatchObject({ kind: "date", date: "2026-10-17" });
+    expect(d("26.0ct 2026")).toMatchObject({ kind: "date", date: "2026-10-26" });
+    expect(d("22/9")).toMatchObject({ kind: "yearless", day: 22, month: 9 });
+    expect(d("5/10").kind).toBe("invalid"); // 5 Oct or 10 May, and no year
+  });
+
+  it("finds the date written inside other text, keeping the original", () => {
+    expect(d("6th Nov - approximately 30 people")).toMatchObject({ kind: "yearless", day: 6, month: 11, raw: "6th Nov - approximately 30 people" });
+    expect(d("17to20 Oct")).toMatchObject({ kind: "yearless", day: 17, month: 10 });
+    expect(d("Oct 16th and 17th")).toMatchObject({ kind: "yearless", day: 16, month: 10 });
+    expect(d("October 10 dinner")).toMatchObject({ kind: "yearless", day: 10, month: 10 });
+    expect(d("Jain food only \nBut different cuisines \n23/24 September")).toMatchObject({ kind: "yearless", day: 23, month: 9 });
+    expect(d("Still to be finalized  app    27 sep")).toMatchObject({ kind: "yearless", day: 27, month: 9 });
+    expect(d("Ganpati mai 15 to 18 September aa sakte ho")).toMatchObject({ kind: "yearless", day: 15, month: 9 });
+  });
+
+  it("leaves text without a clear day and month for review", () => {
+    for (const v of ["Not decided", "next week", "21", "In mid nov", "Diwali", "Approx 26-30 Pax both Veg and Non veg menu", "Wednesday 16th dept", "1 niv 26", "Marriage 5"]) {
+      expect(d(v).kind, v).toBe("invalid");
+    }
+  });
+
+  it("settles DD/MM ambiguity only when one reading is in the year after the enquiry", () => {
+    expect(resolveAmbiguous(["2026-11-04", "2026-04-11"], "2026-09-10T10:00:00Z")).toBe("2026-11-04");
+    expect(resolveAmbiguous(["2026-09-12", "2026-12-09"], "2026-08-01T10:00:00Z")).toBeNull(); // both upcoming
+    expect(resolveAmbiguous(["2026-11-04", "2026-04-11"], null)).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { cellText, EMPTY_CELL, isBlankCell, type RawCell, type RawRow } from "./cells";
-import { parseCreatedTime, parseEventDate, resolveYearless, type YearChoice } from "./dates";
+import { parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless, type YearChoice } from "./dates";
 import { normalizeId } from "./ids";
 import { normalizePhone } from "./phone";
 import { TEMPLATE_COLUMNS, type ColumnMapping, type TemplateKey } from "./template";
@@ -198,7 +198,19 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
       }
       break;
     }
-    case "ambiguous":
+    case "ambiguous": {
+      const resolved = resolveAmbiguous(parsedDate.options, created.iso);
+      if (resolved) {
+        eventDate = resolved;
+        eventStatus = "confirmed";
+        issues.push({
+          field: "event_date",
+          severity: "info",
+          code: "date_disambiguated",
+          message: `"${parsedDate.raw}" could be ${parsedDate.options[0]} or ${parsedDate.options[1]} — using ${resolved}, the only one in the year after the enquiry.`,
+        });
+        break;
+      }
       eventStatus = "needs_review";
       flags.add("date_needs_review");
       issues.push({
@@ -208,6 +220,7 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
         message: `"${parsedDate.raw}" could be ${parsedDate.options[0]} or ${parsedDate.options[1]}. Imported without an event date — confirm with the customer.`,
       });
       break;
+    }
     case "invalid":
       eventStatus = "needs_review";
       flags.add("date_needs_review");
