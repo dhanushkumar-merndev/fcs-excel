@@ -64,7 +64,7 @@ describe("fixture files", () => {
       source_status: "CREATED",
     });
     expect(plan.yearless).toBeGreaterThanOrEqual(3);
-    expect(plan.summary.invalid).toBe(2); // missing name + invalid phone
+    expect(plan.summary.invalid).toBe(1); // invalid phone; a missing name is imported as "Name not given"
 
     const damaged = byName("Rounded ID Lead")[0];
     expect(damaged.row.lead).toMatchObject({ external_lead_id: null, external_id_damaged: true });

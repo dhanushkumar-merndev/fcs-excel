@@ -94,6 +94,7 @@ export const REVIEW_FLAG_LABELS: Record<string, string> = {
   external_id_damaged: "Source ID damaged",
   organic_flag_unreadable: "Organic flag unreadable",
   created_time_unreadable: "Created time unreadable",
+  name_missing: "Name missing",
 };
 
 export function reviewFlagLabel(flag: string) {

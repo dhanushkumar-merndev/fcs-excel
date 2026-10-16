@@ -54,6 +54,9 @@ export type NormalizedRow = {
   yearless?: { day: number; month: number; resolved: boolean };
 };
 
+/** Stored when a row has a phone but no name; flagged "Name missing" for review. */
+export const NAME_PLACEHOLDER = "Name not given";
+
 const EVENT_KEYS: TemplateKey[] = ["occasion", "guests", "menu", "event_date", "event_address"];
 
 /** "row 27", or "CHEF ON DEMAND · row 27" when several sheets are previewed together. */
@@ -105,13 +108,19 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
 
   // Customer
   const name = text(get("full_name"));
-  if (!name) issues.push({ field: "full_name", severity: "error", code: "name_missing", message: "Customer name is missing." });
+  // A lead with a phone is still worth calling: a missing name never blocks the import.
+  if (!name) {
+    flags.add("name_missing");
+    issues.push({ field: "full_name", severity: "warning", code: "name_missing", message: `Customer name is missing — imported as “${NAME_PLACEHOLDER}”.` });
+  }
 
   const phone = normalizePhone(get("phone"));
   if (phone.status === "missing") {
     issues.push({ field: "phone", severity: "error", code: "phone_missing", message: "Phone number is missing." });
   } else if (phone.status === "invalid") {
     issues.push({ field: "phone", severity: "error", code: "phone_invalid", message: phone.message });
+  } else if (phone.note) {
+    issues.push({ field: "phone", severity: "info", code: "phone_country_assumed", message: phone.note });
   }
 
   // Source identifiers
@@ -243,7 +252,7 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
       : null;
 
   const lead: NormalizedLead = {
-    customer_name: name ?? "",
+    customer_name: name ?? NAME_PLACEHOLDER,
     phone_e164: phone.status === "valid" ? phone.e164 : null,
     phone_raw: phone.raw || null,
     external_lead_id: leadId.value,

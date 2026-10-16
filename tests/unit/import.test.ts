@@ -33,6 +33,19 @@ describe("phone", () => {
     expect(normalizePhone(n(919991999189, "9.19992E+11"))).toMatchObject({ status: "valid", e164: "+919991999189", raw: "9.19992E+11" });
     expect(normalizePhone(n(9845738576, "9845738576"))).toMatchObject({ status: "valid", e164: "+919845738576" });
     expect(normalizePhone(s("9.19992E+11"))).toMatchObject({ status: "invalid" });
+    // "+" typed before a 10-digit Indian mobile: invalid as written, so the last 10 digits are used.
+    expect(normalizePhone(s("p:+8527607478"))).toMatchObject({ status: "valid", e164: "+918527607478", note: expect.stringContaining("Indian mobile") });
+    expect(normalizePhone(s("p:+9819115971"))).toMatchObject({ status: "valid", e164: "+919819115971" });
+    expect(normalizePhone(s("+91 0 98457 38576"))).toMatchObject({ status: "valid", e164: "+919845738576" });
+    expect(normalizePhone(s("+6591234567"))).toMatchObject({ status: "valid", e164: "+6591234567" }); // valid Singapore number is kept
+    expect(normalizePhone(s("p:+9845738576"))).toMatchObject({ status: "valid", e164: "+919845738576" });
+    expect("note" in normalizePhone(s("+919845738576"))).toBe(false); // valid as written: no note
+    expect(normalizePhone(s("+1234567890"))).toMatchObject({ status: "invalid" }); // not an Indian mobile either
+    // Stray text around a full number is dropped (with a note); too few digits stay invalid.
+    expect(normalizePhone(s("p:+919845738576 in"))).toMatchObject({ status: "valid", e164: "+919845738576", note: expect.stringContaining("extra characters") });
+    expect(normalizePhone(s("l9845738576"))).toMatchObject({ status: "valid", e164: "+919845738576" });
+    expect(normalizePhone(s("phone"))).toMatchObject({ status: "invalid" });
+    expect(normalizePhone(s("call 98457"))).toMatchObject({ status: "invalid" });
     expect(normalizePhone(n(9.19992e15, "9.19992E+15"))).toMatchObject({ status: "invalid" });
     expect(normalizePhone(s("+91 99919"))).toMatchObject({ status: "invalid" });
   });
@@ -170,9 +183,13 @@ describe("row normalization", () => {
     expect(row.lead.review_flags).not.toContain("date_needs_review");
   });
 
-  it("rejects rows without a name or valid phone", () => {
-    expect(normalizeRow(templateRow(3, { ...base, full_name: s(" ") }), mapping, { mode: "unresolved" }).valid).toBe(false);
+  it("rejects rows only for a missing or wrong phone; a missing name is imported and flagged", () => {
+    const nameless = normalizeRow(templateRow(3, { ...base, full_name: s(" ") }), mapping, { mode: "unresolved" });
+    expect(nameless.valid).toBe(true);
+    expect(nameless.lead.customer_name).toBe("Name not given");
+    expect(nameless.lead.review_flags).toContain("name_missing");
     expect(normalizeRow(templateRow(4, { ...base, phone: s("12") }), mapping, { mode: "unresolved" }).valid).toBe(false);
+    expect(normalizeRow(templateRow(5, { ...base, phone: s("") }), mapping, { mode: "unresolved" }).valid).toBe(false);
   });
 });
 

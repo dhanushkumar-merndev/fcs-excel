@@ -2,14 +2,16 @@ import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/
 import { cellText, type RawCell } from "./cells";
 
 export type PhoneResult =
-  | { status: "valid"; e164: string; raw: string; country: string | undefined }
+  | { status: "valid"; e164: string; raw: string; country: string | undefined; note?: string }
   | { status: "missing"; raw: string }
   | { status: "invalid"; raw: string; message: string };
 
 /**
  * Normalizes a phone value to E.164. Accepts Meta's `p:+919991999189`, local Indian numbers
  * (10 digits, 0-prefixed, or 91-prefixed without +), and international numbers with +/00.
- * Never guesses: anything not clearly valid is reported as invalid with the reason.
+ * Corrections it makes — dropping stray text around a full number, and reading a "+" plus 10-digit
+ * Indian mobile as +91 — are noted on the row; anything else that isn't clearly valid is reported as
+ * invalid with the reason.
  */
 export function normalizePhone(input: RawCell | string | null | undefined, defaultCountry: CountryCode = "IN"): PhoneResult {
   const cell: RawCell | undefined = typeof input === "string" ? { t: "s", v: input } : (input ?? undefined);
@@ -41,8 +43,15 @@ export function normalizePhone(input: RawCell | string | null | undefined, defau
     .replace(/^(p|tel|phone)\s*:\s*/i, "")
     .replace(/[\s \-().\/]/g, "");
   if (text.startsWith("00")) text = `+${text.slice(2)}`;
+  let note: string | undefined;
   if (/[^\d+]/.test(text) || text.lastIndexOf("+") > 0) {
-    return { status: "invalid", raw, message: "Contains characters that aren't part of a phone number." };
+    // Stray text around the number ("+9198… in", "l98…"): keep only the digits when a full number remains.
+    const digits = text.replace(/\D/g, "");
+    if (digits.length < 10) {
+      return { status: "invalid", raw, message: "Contains characters that aren't part of a phone number." };
+    }
+    text = `${text.startsWith("+") ? "+" : ""}${digits}`;
+    note = `"${raw}" had extra characters — only its digits were used.`;
   }
 
   if (!text.startsWith("+")) {
@@ -57,11 +66,29 @@ export function normalizePhone(input: RawCell | string | null | undefined, defau
   const parsed = text.startsWith("+")
     ? parsePhoneNumberFromString(text)
     : parsePhoneNumberFromString(text, defaultCountry);
-  if (!parsed) {
-    return { status: "invalid", raw, message: "Not a recognizable phone number." };
+  if (parsed?.isValid()) {
+    return { status: "valid", e164: parsed.number, raw, country: parsed.country, ...(note ? { note } : {}) };
   }
-  if (parsed.isValid()) {
-    return { status: "valid", e164: parsed.number, raw, country: parsed.country };
+
+  // Lead forms often get a "+" typed straight before a 10-digit Indian mobile (p:+8527607478 reads
+  // as Hong Kong, p:+9819115971 as Iran). When the number isn't valid as written and its last 10
+  // digits are an Indian mobile with at most a 0 / 91 / 0091 prefix, it is read as +91 — with a note.
+  if (defaultCountry === "IN") {
+    const mobile = text.replace(/\D/g, "").match(/^(?:0|91|910|091|0091)?([6-9]\d{9})$/)?.[1];
+    const india = mobile ? parsePhoneNumberFromString(`+91${mobile}`) : undefined;
+    if (india?.isValid()) {
+      return {
+        status: "valid",
+        e164: india.number,
+        raw,
+        country: "IN",
+        note: `"${raw}" isn't a valid number as written — read the last 10 digits as an Indian mobile.`,
+      };
+    }
+  }
+
+  if (!parsed) {
+    return { status: "invalid", raw, message: note ? "Contains characters that aren't part of a phone number." : "Not a recognizable phone number." };
   }
   const digitCount = text.replace(/\D/g, "").length;
   if (parsed.isPossible()) {
