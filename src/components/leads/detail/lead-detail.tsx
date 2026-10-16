@@ -196,7 +196,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
                 <Pencil /> Edit details
               </Button>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-6">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-7">
               <Fact icon={<PartyPopper />} label="Occasion" value={humanizeCode(lead.occasion_code)} />
               <Fact icon={<UtensilsCrossed />} label="Menu" value={humanizeCode(lead.menu_code)} />
               <Fact icon={<Users />} label="Guests" value={guestRangeLabel(lead.guest_range)} />
