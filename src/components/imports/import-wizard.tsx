@@ -14,7 +14,7 @@ import type { WorkloadRow } from "@/lib/domain/types";
 import type { YearChoice } from "@/lib/import/dates";
 import type { ExistingLead } from "@/lib/import/duplicates";
 import { ImportFileError, parseImportFile, rowLimitError, type ParsedFile, type ParsedSheet } from "@/lib/import/parse";
-import { decisionsForSheet, matchKeys, normalizeSheets, prepareImport, summarizeBySheet, type Decision } from "@/lib/import/prepare";
+import { chunkMatchKeys, decisionsForSheet, matchKeys, normalizeSheets, prepareImport, summarizeBySheet, type Decision } from "@/lib/import/prepare";
 import { autoMapHeaders, MAX_IMPORT_ROWS, missingRequired, type ColumnMapping } from "@/lib/import/template";
 import { cn } from "@/lib/utils";
 import { ConfirmStep } from "./steps/confirm-step";
@@ -135,17 +135,22 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
     if (!normalized) return;
     setMatchError(null);
     setExisting(null);
-    const keys = matchKeys(normalized);
     try {
-      const res = await fetch("/api/imports/matches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(keys),
-      });
-      if (res.status === 401) reportSessionExpired();
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message ?? "Couldn't check duplicates.");
-      setExisting(json.matches as ExistingLead[]);
+      // Several sheets can hold more than one request's worth of phones and IDs: check in parts.
+      const parts = await Promise.all(
+        chunkMatchKeys(matchKeys(normalized)).map(async (keys) => {
+          const res = await fetch("/api/imports/matches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(keys),
+          });
+          if (res.status === 401) reportSessionExpired();
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.message ?? "Couldn't check duplicates.");
+          return json.matches as ExistingLead[];
+        }),
+      );
+      setExisting([...new Map(parts.flat().map((m) => [m.lead_id, m])).values()]);
     } catch (error) {
       setMatchError(error instanceof Error ? error.message : "Couldn't check duplicates. Check your connection and try again.");
     }

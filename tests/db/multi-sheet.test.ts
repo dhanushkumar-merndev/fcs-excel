@@ -11,6 +11,7 @@ import type { ExistingLead } from "@/lib/import/duplicates";
 import { parseImportFile, type ParsedSheet } from "@/lib/import/parse";
 import {
   buildStagedRows,
+  chunkMatchKeys,
   decisionsForSheet,
   matchKeys,
   normalizeAll,
@@ -97,6 +98,14 @@ describe("multi-sheet import", () => {
       { sheet: "CHEF ON DEMAND", total: 2, toCreate: 2, skipped: 0, invalid: 0 },
       { sheet: "FRANCHISE PARTNER ", total: 2, toCreate: 1, skipped: 1, invalid: 0 },
     ]);
+  });
+
+  it("splits duplicate lookups into requests the API accepts", () => {
+    const keys = { phones: Array.from({ length: 2100 }, (_, i) => `+9198${i}`), externalIds: ["l:1"], rawIds: [] };
+    const parts = chunkMatchKeys(keys);
+    expect(parts.map((p) => [p.phones.length, p.externalIds.length])).toEqual([[1000, 1], [1000, 0], [100, 0]]);
+    expect(parts.flatMap((p) => p.phones)).toEqual(keys.phones);
+    expect(chunkMatchKeys({ phones: [], externalIds: [], rawIds: [] })).toHaveLength(1);
   });
 
   it("splits reviewer decisions back to each sheet's own rows", () => {

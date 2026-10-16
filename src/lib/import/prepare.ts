@@ -44,6 +44,16 @@ export function matchKeys(rows: NormalizedRow[]) {
   return { phones: [...phones], externalIds: [...ids], rawIds: [...rawIds] };
 }
 
+/** Splits lookup keys into requests of at most `size` values per list (the matches API limit). */
+export function chunkMatchKeys(keys: ReturnType<typeof matchKeys>, size = 1000) {
+  const count = Math.max(1, Math.ceil(Math.max(keys.phones.length, keys.externalIds.length, keys.rawIds.length) / size));
+  return Array.from({ length: count }, (_, i) => ({
+    phones: keys.phones.slice(i * size, (i + 1) * size),
+    externalIds: keys.externalIds.slice(i * size, (i + 1) * size),
+    rawIds: keys.rawIds.slice(i * size, (i + 1) * size),
+  }));
+}
+
 export function normalizeAll(rows: RawRow[], mapping: ColumnMapping, yearChoice: YearChoice) {
   return rows.map((r) => normalizeRow(r, mapping, yearChoice));
 }
