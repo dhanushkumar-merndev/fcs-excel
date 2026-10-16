@@ -42,7 +42,7 @@ async function Content() {
           </li>
         ))}
       </ul>
-      <MoreAccount user={{ fullName: staff.fullName, email: staff.email, role: staff.role }} />
+      <MoreAccount user={{ fullName: staff.fullName, username: staff.username, role: staff.role }} />
     </div>
   );
 }

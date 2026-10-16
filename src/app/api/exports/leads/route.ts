@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       ["Contents", scope === "selected" ? `Selected rows only (${rows.length})` : `Full filtered result (${rows.length} leads), not just one page`],
       ["Layout", layout === "source" ? "Original import template columns (re-import safe: existing source IDs are skipped)" : "CRM export"],
       ["Filters", scope === "selected" ? "Selected lead IDs" : describeFilters(filters, state.view)],
-      ["Exported by", `${staff.fullName} (${staff.email})`],
+      ["Exported by", `${staff.fullName} (@${staff.username})`],
       ["Exported at", `${formatDateTime(new Date())} IST`],
       ["Notes", "Phone numbers and IDs are stored as text. Dates are real Excel dates. Values starting with = or @ are prefixed with ' to prevent formulas."],
     ],

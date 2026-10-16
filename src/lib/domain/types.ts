@@ -3,14 +3,14 @@ export type Role = "admin" | "manager" | "salesperson";
 export type Staff = {
   id: string;
   fullName: string;
-  email: string;
+  username: string;
   role: Role;
 };
 
 export type ProfileRow = {
   id: string;
   full_name: string;
-  email: string;
+  username: string;
   phone: string | null;
   role: Role;
   is_active: boolean;

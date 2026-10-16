@@ -1,10 +1,11 @@
 "use client";
 
-import { Copy, Ellipsis, Link2, MessageCircle, UserPlus } from "lucide-react";
+import { Copy, Ellipsis, KeyRound, MessageCircle, RefreshCw, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { changeRole, createSignInLink, inviteStaff, setActive } from "@/actions/team";
+import { addStaff, changeRole, resetStaffPassword, setActive } from "@/actions/team";
 import { useRunAction } from "@/components/leads/use-run-action";
+import { ChangePasswordSheet } from "@/components/shell/change-password-sheet";
 import { PageHeader } from "@/components/shell/page";
 import { Avatar } from "@/components/shell/user-menu";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
+import { generatePassword, MIN_PASSWORD, normalizeUsername, suggestUsername, USERNAME_RULES } from "@/lib/auth/username";
 import { formatDate, timeAgo } from "@/lib/domain/format";
 import { ROLE_LABELS } from "@/lib/domain/labels";
 import type { ProfileRow, Role } from "@/lib/domain/types";
@@ -26,34 +29,83 @@ const ROLE_HELP: Record<Role, string> = {
   salesperson: "Only their assigned leads and personal reports.",
 };
 
+const EMPTY_FORM = { fullName: "", username: "", usernameEdited: false, role: "salesperson" as Role, password: "" };
+
+type Credentials = { name: string; username: string; password: string; kind: "new" | "reset" };
+
+/** Plain-text login details to paste into WhatsApp or a message. */
+function credentialsText(c: Credentials) {
+  return `Hi ${c.name}, your login for our CRM:\n${window.location.origin}\nUsername: ${c.username}\nPassword: ${c.password}`;
+}
+
 export function TeamManager({ members, currentUserId }: { members: Member[]; currentUserId: string }) {
   const run = useRunAction();
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [form, setForm] = useState({ fullName: "", email: "", role: "salesperson" as Role });
-  const [inviting, setInviting] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [link, setLink] = useState<{ name: string; url: string; kind: string } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [resetFor, setResetFor] = useState<Member | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [ownPasswordOpen, setOwnPasswordOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ member: Member; action: "deactivate" | "reactivate" } | { member: Member; action: "role"; role: Role } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function invite() {
-    setInviting(true);
-    setInviteError(null);
-    const result = await run(() => inviteStaff(form), { quietValidation: true });
-    setInviting(false);
+  function openAdd() {
+    setForm({ ...EMPTY_FORM, password: generatePassword() });
+    setShowNewPassword(true);
+    setAddError(null);
+    setAddOpen(true);
+  }
+
+  async function add() {
+    setAdding(true);
+    setAddError(null);
+    const result = await run(() => addStaff(form), { quietValidation: true });
+    setAdding(false);
     if (result.ok) {
-      setInviteOpen(false);
-      setLink({ name: form.fullName, url: result.data.link, kind: "invite" });
-      setForm({ fullName: "", email: "", role: "salesperson" });
-      toast.success(`${form.fullName} added`);
+      setAddOpen(false);
+      setCredentials({ name: form.fullName.trim(), username: result.data.username, password: form.password, kind: "new" });
+      toast.success(`${form.fullName.trim()} added`);
     } else if (result.code === "validation") {
-      setInviteError(result.message);
+      setAddError(result.message);
     }
   }
 
-  async function signInLink(member: Member) {
-    const result = await run(() => createSignInLink(member.id));
-    if (result.ok) setLink({ name: member.full_name, url: result.data.link, kind: result.data.kind });
+  function openReset(member: Member) {
+    setResetFor(member);
+    setResetPassword(generatePassword());
+    setShowResetPassword(true);
+    setResetError(null);
+  }
+
+  async function reset() {
+    if (!resetFor) return;
+    setResetting(true);
+    setResetError(null);
+    const result = await run(() => resetStaffPassword({ userId: resetFor.id, password: resetPassword }), { quietValidation: true });
+    setResetting(false);
+    if (result.ok) {
+      setCredentials({ name: resetFor.full_name, username: result.data.username, password: resetPassword, kind: "reset" });
+      setResetFor(null);
+      toast.success("Password reset");
+    } else if (result.code === "validation") {
+      setResetError(result.message);
+    }
+  }
+
+  async function copyCredentials() {
+    if (!credentials) return;
+    try {
+      await navigator.clipboard.writeText(credentialsText(credentials));
+      toast.success("Login details copied");
+    } catch {
+      toast.error("Couldn't copy — select the details and copy them manually.");
+    }
   }
 
   async function confirmAction() {
@@ -77,10 +129,10 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
     <>
       <PageHeader
         title="Team"
-        description="Invite-only. Roles are enforced by the database on every request."
+        description="Staff sign in with a username and password you set. Roles are enforced by the database on every request."
         actions={
-          <Button onClick={() => setInviteOpen(true)}>
-            <UserPlus /> Invite
+          <Button onClick={openAdd}>
+            <UserPlus /> Add member
           </Button>
         }
       />
@@ -94,11 +146,11 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
                 <p className="flex flex-wrap items-center gap-2 font-medium">
                   <span className="truncate">{m.full_name}</span>
                   {m.id === currentUserId ? <span className="text-xs font-normal text-fg-subtle">You</span> : null}
-                  {!m.is_active ? <Badge tint="red">Deactivated</Badge> : !m.last_sign_in_at ? <Badge tint="amber">Invited — not signed in yet</Badge> : null}
+                  {!m.is_active ? <Badge tint="red">Deactivated</Badge> : !m.last_sign_in_at ? <Badge tint="amber">Not signed in yet</Badge> : null}
                 </p>
-                <p className="truncate text-[13px] text-fg-muted">{m.email}</p>
+                <p className="truncate text-[13px] text-fg-muted">@{m.username}</p>
                 <p className="text-xs text-fg-subtle">
-                  {m.last_sign_in_at ? `Last sign-in ${timeAgo(m.last_sign_in_at)}` : `Invited ${formatDate(m.invited_at)}`}
+                  {m.last_sign_in_at ? `Last sign-in ${timeAgo(m.last_sign_in_at)}` : `Added ${formatDate(m.invited_at)}`}
                   {m.is_active ? ` · ${m.open_leads} open leads · ${m.overdue_follow_ups} overdue` : ""}
                 </p>
               </div>
@@ -122,9 +174,13 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
                   <Ellipsis className="size-4" />
                 </MenuTrigger>
                 <MenuContent>
-                  {m.is_active ? (
-                    <MenuItem icon={<Link2 />} onSelect={() => void signInLink(m)}>
-                      {m.last_sign_in_at ? "Copy password reset link" : "Copy invite link again"}
+                  {m.id === currentUserId ? (
+                    <MenuItem icon={<KeyRound />} onSelect={() => setOwnPasswordOpen(true)}>
+                      Change my password
+                    </MenuItem>
+                  ) : m.is_active ? (
+                    <MenuItem icon={<KeyRound />} onSelect={() => openReset(m)}>
+                      Reset password
                     </MenuItem>
                   ) : null}
                   {m.id !== currentUserId ? (
@@ -147,31 +203,73 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
       </ul>
 
       <Sheet
-        open={inviteOpen}
-        onOpenChange={(o) => !inviting && setInviteOpen(o)}
-        title="Invite a team member"
-        description="You'll get a one-time sign-in link to send them. They set their own password."
+        open={addOpen}
+        onOpenChange={(o) => !adding && setAddOpen(o)}
+        title="Add a team member"
+        description="Create their login. You'll get the username and password to send them — nothing is emailed."
         footer={
           <>
-            <Button variant="secondary" onClick={() => setInviteOpen(false)} disabled={inviting}>
+            <Button variant="secondary" onClick={() => setAddOpen(false)} disabled={adding}>
               Cancel
             </Button>
-            <Button onClick={invite} loading={inviting}>
-              Create invite
+            <Button onClick={add} loading={adding}>
+              Create login
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
-          {inviteError ? <InlineAlert tone="danger">{inviteError}</InlineAlert> : null}
-          <Field label="Full name" htmlFor="inv-name" required>
-            <Input id="inv-name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} autoComplete="off" />
+          {addError ? <InlineAlert tone="danger">{addError}</InlineAlert> : null}
+          <Field label="Full name" htmlFor="new-name" required>
+            <Input
+              id="new-name"
+              value={form.fullName}
+              autoComplete="off"
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  fullName: e.target.value,
+                  username: form.usernameEdited ? form.username : suggestUsername(e.target.value),
+                })
+              }
+            />
           </Field>
-          <Field label="Email" htmlFor="inv-email" required>
-            <Input id="inv-email" type="email" inputMode="email" autoCapitalize="none" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Field label="Username" htmlFor="new-username" required hint={USERNAME_RULES}>
+            <Input
+              id="new-username"
+              value={form.username}
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(e) => setForm({ ...form, username: normalizeUsername(e.target.value), usernameEdited: true })}
+            />
           </Field>
-          <Field label="Role" htmlFor="inv-role" hint={ROLE_HELP[form.role]}>
-            <Select id="inv-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+          <Field label="Password" htmlFor="new-password" required hint={`At least ${MIN_PASSWORD} characters. They can change it after signing in.`}>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <PasswordInput
+                  id="new-password"
+                  autoComplete="new-password"
+                  value={form.password}
+                  visible={showNewPassword}
+                  onVisibleChange={setShowNewPassword}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setForm({ ...form, password: generatePassword() });
+                  setShowNewPassword(true);
+                }}
+              >
+                <RefreshCw /> New
+              </Button>
+            </div>
+          </Field>
+          <Field label="Role" htmlFor="new-role" hint={ROLE_HELP[form.role]}>
+            <Select id="new-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
               <option value="salesperson">Salesperson</option>
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
@@ -181,36 +279,80 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
       </Sheet>
 
       <Sheet
-        open={Boolean(link)}
-        onOpenChange={(o) => !o && setLink(null)}
-        title={link?.kind === "reset" ? "Password reset link" : "Invite link"}
-        description={`Send this to ${link?.name}. It works once and expires within 24 hours.`}
+        open={Boolean(resetFor)}
+        onOpenChange={(o) => !resetting && !o && setResetFor(null)}
+        size="sm"
+        title={`Reset password for ${resetFor?.full_name ?? ""}`}
+        description={`Sets a new password for @${resetFor?.username ?? ""}. Their old password stops working.`}
         footer={
           <>
-            <Button
-              variant="secondary"
-              onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Hi ${link?.name}, here is your link to sign in to our CRM: ${link?.url}`)}`, "_blank", "noopener")}
-            >
-              <MessageCircle /> WhatsApp
+            <Button variant="secondary" onClick={() => setResetFor(null)} disabled={resetting}>
+              Cancel
             </Button>
-            <Button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(link!.url);
-                  toast.success("Link copied");
-                } catch {
-                  toast.error("Couldn't copy — select the link and copy it manually.");
-                }
-              }}
-            >
-              <Copy /> Copy link
+            <Button onClick={reset} loading={resetting}>
+              Set password
             </Button>
           </>
         }
       >
-        <p className="rounded-xl bg-subtle p-3 font-mono text-[12px] break-all select-all">{link?.url}</p>
-        <p className="mt-3 text-[13px] text-fg-muted">Anyone with this link can set the password for this account, so share it only with them.</p>
+        <div className="flex flex-col gap-4">
+          {resetError ? <InlineAlert tone="danger">{resetError}</InlineAlert> : null}
+          <Field label="New password" htmlFor="reset-password" hint={`At least ${MIN_PASSWORD} characters.`}>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <PasswordInput
+                  id="reset-password"
+                  autoComplete="new-password"
+                  value={resetPassword}
+                  visible={showResetPassword}
+                  onVisibleChange={setShowResetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setResetPassword(generatePassword());
+                  setShowResetPassword(true);
+                }}
+              >
+                <RefreshCw /> New
+              </Button>
+            </div>
+          </Field>
+        </div>
       </Sheet>
+
+      <Sheet
+        open={Boolean(credentials)}
+        onOpenChange={(o) => !o && setCredentials(null)}
+        size="sm"
+        title={credentials?.kind === "reset" ? "New password set" : "Login created"}
+        description={`Send these details to ${credentials?.name}. The password is shown only now — if it's lost, reset it here.`}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => credentials && window.open(`https://wa.me/?text=${encodeURIComponent(credentialsText(credentials))}`, "_blank", "noopener")}
+            >
+              <MessageCircle /> WhatsApp
+            </Button>
+            <Button onClick={() => void copyCredentials()}>
+              <Copy /> Copy details
+            </Button>
+          </>
+        }
+      >
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-xl bg-subtle p-4 text-sm">
+          <dt className="text-fg-muted">Username</dt>
+          <dd className="font-mono break-all select-all">{credentials?.username}</dd>
+          <dt className="text-fg-muted">Password</dt>
+          <dd className="font-mono break-all select-all">{credentials?.password}</dd>
+        </dl>
+        <p className="mt-3 text-[13px] text-fg-muted">They can change their password any time from their account menu.</p>
+      </Sheet>
+
+      <ChangePasswordSheet open={ownPasswordOpen} onOpenChange={setOwnPasswordOpen} />
 
       <ConfirmDialog
         open={Boolean(confirm)}

@@ -1,11 +1,11 @@
 /**
- * Sets a password on an existing staff account and confirms its email. Use it when invite or reset
- * emails can't be delivered (Supabase's built-in email only reaches project members).
- * Prints the password once; change it after signing in (Forgot password).
- *   pnpm staff:password --target live --email you@example.com [--password "…"]
+ * Sets the password (and optionally the username) of an existing staff account. Use it when nobody
+ * can sign in to reset it from Team.
+ *   pnpm staff:password --target live --user <username or email> [--username new-name] [--password "…"]
+ * Without --password a random one is generated. Prints the login details once.
  */
-import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { generatePassword, isValidUsername, MIN_PASSWORD, normalizeUsername, USERNAME_RULES } from "../src/lib/auth/username";
 import { projectKeys } from "./supabase/keys";
 import { parseTarget, projectRef } from "./supabase/mgmt";
 
@@ -14,14 +14,19 @@ const arg = (name: string) => {
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 const target = parseTarget(process.argv);
-const email = arg("email")?.trim().toLowerCase();
-if (!email) {
-  console.error('Usage: pnpm staff:password --target live --email you@example.com [--password "…"]');
+const who = arg("user")?.trim().toLowerCase();
+const newUsername = arg("username") ? normalizeUsername(arg("username")!) : undefined;
+const password = arg("password") ?? generatePassword();
+if (!who) {
+  console.error('Usage: pnpm staff:password --target live --user <username or email> [--username new-name] [--password "…"]');
   process.exit(1);
 }
-const password = arg("password") ?? randomBytes(12).toString("base64url");
-if (password.length < 10) {
-  console.error("Use a password of at least 10 characters.");
+if (newUsername !== undefined && !isValidUsername(newUsername)) {
+  console.error(`Username: ${USERNAME_RULES}`);
+  process.exit(1);
+}
+if (password.length < MIN_PASSWORD) {
+  console.error(`Use a password of at least ${MIN_PASSWORD} characters.`);
   process.exit(1);
 }
 
@@ -30,23 +35,29 @@ const admin = createClient(keys.url, keys.secret, { auth: { persistSession: fals
 
 const { data: profile, error } = await admin
   .from("profiles")
-  .select("id, full_name, role, is_active")
-  .eq("email", email)
+  .select("id, full_name, username, role, is_active")
+  .eq(who.includes("@") ? "email" : "username", who)
   .maybeSingle();
 if (error) throw new Error(error.message);
 if (!profile) {
-  console.error(`${email} isn't a staff member. Run bootstrap:admin, or invite them from Team.`);
+  console.error(`No staff member matches ${who}. Run bootstrap:admin, or add them from Team.`);
   process.exit(1);
 }
 if (!profile.is_active) {
-  console.error(`${email} is deactivated. Reactivate them from Team first.`);
+  console.error(`@${profile.username} is deactivated. Reactivate them from Team first.`);
   process.exit(1);
+}
+
+let username = profile.username as string;
+if (newUsername && newUsername !== username) {
+  const { error: renameError } = await admin.from("profiles").update({ username: newUsername }).eq("id", profile.id);
+  if (renameError) throw new Error(renameError.code === "23505" ? `@${newUsername} is already taken.` : renameError.message);
+  username = newUsername;
 }
 
 const { error: updateError } = await admin.auth.admin.updateUserById(profile.id, { password, email_confirm: true });
 if (updateError) throw new Error(updateError.message);
 
-console.log(`\nPassword set for ${profile.full_name} (${profile.role}) on ${target}.`);
-console.log(`  Email:    ${email}`);
+console.log(`\nLogin for ${profile.full_name} (${profile.role}) on ${target}:`);
+console.log(`  Username: ${username}`);
 console.log(`  Password: ${password}`);
-console.log("\nSign in, then change it from Forgot password if this was shared.");

@@ -1,11 +1,15 @@
 "use server";
 
+import { createClient as createStatelessClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { siteOrigin } from "@/lib/site";
+import { invalid, ok, type ActionResult } from "@/lib/action-result";
+import { MIN_PASSWORD, normalizeUsername } from "@/lib/auth/username";
+import { supabasePublishableKey, supabaseUrl } from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthFormState = { error?: string; success?: string; email?: string } | undefined;
+export type AuthFormState = { error?: string; username?: string } | undefined;
 
 function safeNext(value: FormDataEntryValue | null) {
   const next = typeof value === "string" ? value : "";
@@ -13,24 +17,44 @@ function safeNext(value: FormDataEntryValue | null) {
 }
 
 const credentials = z.object({
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
+  username: z.string().transform(normalizeUsername).pipe(z.string().min(1, "Enter your username.")),
   password: z.string().min(1, "Enter your password."),
 });
 
+const WRONG_CREDENTIALS = "That username and password don't match. Try again, or ask your admin to reset your password.";
+
+/**
+ * Resolves a username to the auth address behind it (server-side only, so staff emails are never
+ * exposed). Older accounts can still type their email.
+ */
+async function loginEmail(username: string) {
+  if (username.includes("@")) return username;
+  const { data } = await createAdminClient().from("profiles").select("email").eq("username", username).maybeSingle();
+  return data?.email ?? null;
+}
+
 export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = credentials.safeParse({ email: formData.get("email"), password: formData.get("password") });
-  const email = String(formData.get("email") ?? "");
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message, email };
+  const username = String(formData.get("username") ?? "");
+  const parsed = credentials.safeParse({ username, password: formData.get("password") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message, username };
+
+  let email: string | null;
+  try {
+    email = await loginEmail(parsed.data.username);
+  } catch {
+    return { error: "We couldn't sign you in right now. Try again in a moment.", username };
+  }
+  if (!email) return { error: WRONG_CREDENTIALS, username };
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: parsed.data.password });
   if (error || !data.user) {
     const message = /invalid login credentials/i.test(error?.message ?? "")
-      ? "That email and password don't match. Try again or reset your password."
+      ? WRONG_CREDENTIALS
       : /banned/i.test(error?.message ?? "")
         ? "This account has been deactivated. Contact your admin."
         : "We couldn't sign you in right now. Try again in a moment.";
-    return { error: message, email };
+    return { error: message, username };
   }
 
   const { data: profile } = await supabase
@@ -40,49 +64,45 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
     .maybeSingle();
   if (!profile?.is_active) {
     await supabase.auth.signOut();
-    return { error: "Your account isn't active in this workspace. Contact your admin.", email };
+    return { error: "Your account isn't active in this workspace. Contact your admin.", username };
   }
   redirect(safeNext(formData.get("next")));
 }
 
-export async function requestPasswordReset(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const email = z.string().trim().toLowerCase().email().safeParse(formData.get("email"));
-  if (!email.success) return { error: "Enter a valid email address." };
-  const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(email.data, {
-    redirectTo: `${await siteOrigin()}/auth/confirm?next=/set-password`,
-  });
-  // Same message whether or not the account exists.
-  return {
-    success:
-      "If that email belongs to a team member, a reset link is on its way. If it doesn't arrive, ask your admin for a reset link.",
-  };
-}
-
-const passwordSchema = z
+const changeSchema = z
   .object({
-    password: z.string().min(8, "Use at least 8 characters."),
+    current: z.string().min(1, "Enter your current password."),
+    password: z.string().min(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`).max(72, "Use at most 72 characters."),
     confirm: z.string(),
   })
-  .refine((v) => v.password === v.confirm, { message: "Passwords don't match.", path: ["confirm"] });
+  .refine((v) => v.password === v.confirm, { message: "The new passwords don't match.", path: ["confirm"] })
+  .refine((v) => v.password !== v.current, { message: "Choose a password different from your current one.", path: ["password"] });
 
-export async function setPassword(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const parsed = passwordSchema.safeParse({ password: formData.get("password"), confirm: formData.get("confirm") });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+/** Signed-in staff change their own password; the current one is checked first. */
+export async function changeMyPassword(input: z.input<typeof changeSchema>): Promise<ActionResult<null>> {
+  const parsed = changeSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error.issues[0]?.message ?? "Check the form.");
   const supabase = await createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims?.sub) {
-    return { error: "This link has expired. Ask your admin for a new invite or reset link." };
-  }
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user?.email) return { ok: false, code: "unauthenticated", message: "Your session expired. Sign in again." };
+
+  // Verify the current password on a throwaway client so this browser's session is untouched.
+  const verifier = createStatelessClient(supabaseUrl(), supabasePublishableKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { error: wrong } = await verifier.auth.signInWithPassword({ email: auth.user.email, password: parsed.data.current });
+  if (wrong) return invalid(/invalid login credentials/i.test(wrong.message) ? "Your current password is incorrect." : "Couldn't check your current password. Try again.");
+  await verifier.auth.signOut({ scope: "local" });
+
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) {
-    return {
-      error: /same/i.test(error.message)
+    return invalid(
+      /same/i.test(error.message)
         ? "Choose a password different from your current one."
         : /weak|short|characters/i.test(error.message)
           ? error.message
-          : "We couldn't save your password. Try again.",
-    };
+          : "Couldn't save your password. Try again.",
+    );
   }
-  redirect("/");
+  return ok(null);
 }

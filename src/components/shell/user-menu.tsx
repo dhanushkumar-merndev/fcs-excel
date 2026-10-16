@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { ChevronsUpDown, KeyRound, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { useState } from "react";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { ROLE_LABELS } from "@/lib/domain/labels";
 import { cn, initials } from "@/lib/utils";
+import { ChangePasswordSheet } from "./change-password-sheet";
 import { useTheme, type ThemePref } from "./theme";
 
 export function Avatar({ name, className }: { name: string; className?: string }) {
@@ -30,11 +32,13 @@ export function UserMenu({
   user,
   collapsed,
 }: {
-  user: { fullName: string; email: string; role: string };
+  user: { fullName: string; username: string; role: string };
   collapsed?: boolean;
 }) {
   const { pref, setPref } = useTheme();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   return (
+    <>
     <Menu>
       <MenuTrigger
         className={cn(
@@ -55,7 +59,10 @@ export function UserMenu({
         )}
       </MenuTrigger>
       <MenuContent align={collapsed ? "start" : "end"} side="top" className="w-60">
-        <MenuLabel className="truncate">{user.email}</MenuLabel>
+        <MenuLabel className="truncate">@{user.username}</MenuLabel>
+        <MenuItem icon={<KeyRound />} onSelect={() => setPasswordOpen(true)}>
+          Change password
+        </MenuItem>
         <MenuSeparator />
         <MenuLabel>Theme</MenuLabel>
         <MenuRadioGroup value={pref} onValueChange={(v) => setPref(v as ThemePref)}>
@@ -75,5 +82,7 @@ export function UserMenu({
         </MenuItem>
       </MenuContent>
     </Menu>
+    <ChangePasswordSheet open={passwordOpen} onOpenChange={setPasswordOpen} />
+    </>
   );
 }

@@ -49,7 +49,7 @@ export async function getTeam(): Promise<ProfileRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, role, is_active, invited_at, deactivated_at")
+    .select("id, full_name, username, phone, role, is_active, invited_at, deactivated_at")
     .order("full_name");
   return (data ?? []) as ProfileRow[];
 }

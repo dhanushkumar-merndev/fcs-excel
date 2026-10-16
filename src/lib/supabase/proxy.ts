@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/auth/", "/set-password"];
+const PUBLIC_PATHS = ["/login", "/auth/"];
 
 /** Refreshes the Supabase session cookie and optimistically redirects signed-out visitors. */
 export async function updateSession(request: NextRequest) {

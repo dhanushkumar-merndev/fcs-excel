@@ -38,7 +38,7 @@ export async function SidebarSlot() {
       items={navFor(staff.role)}
       businessName={businessName}
       overdueCount={overdue}
-      user={{ fullName: staff.fullName, email: staff.email, role: staff.role }}
+      user={{ fullName: staff.fullName, username: staff.username, role: staff.role }}
     />
   );
 }

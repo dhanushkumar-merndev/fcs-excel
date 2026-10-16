@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { RawRow } from "../src/lib/import/cells";
 import { buildStagedRows, normalizeAll, prepareImport } from "../src/lib/import/prepare";
 import { autoMapHeaders } from "../src/lib/import/template";
+import { loginEmailFor } from "../src/lib/auth/username";
 import { HEADERS, row } from "./fixtures/rows";
 import { loadToolEnv, upsertEnvFile } from "./supabase/env";
 import { projectKeys } from "./supabase/keys";
@@ -36,20 +37,21 @@ const STAFF = [
 const ids: Record<string, string> = {};
 const creds: Record<string, string> = {};
 for (const s of STAFF) {
-  const email = `demo.${s.key.toLowerCase().replace("_", ".")}@example.com`;
+  const username = `demo.${s.key.toLowerCase().replace("_", ".")}`;
+  const email = loginEmailFor(username);
   const password = env[`DEMO_${s.key}_PASSWORD`] || randomBytes(12).toString("base64url");
-  const { data: existing } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+  const { data: existing } = await admin.from("profiles").select("id").eq("username", username).maybeSingle();
   if (existing) {
     ids[s.key] = existing.id;
     await admin.auth.admin.updateUserById(existing.id, { password });
   } else {
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    if (error || !data.user) throw new Error(`createUser ${email}: ${error?.message}`);
+    if (error || !data.user) throw new Error(`createUser ${username}: ${error?.message}`);
     ids[s.key] = data.user.id;
-    const { error: pErr } = await admin.from("profiles").insert({ id: data.user.id, full_name: s.name, email, role: s.role });
-    if (pErr) throw new Error(`profile ${email}: ${pErr.message}`);
+    const { error: pErr } = await admin.from("profiles").insert({ id: data.user.id, full_name: s.name, email, username, role: s.role });
+    if (pErr) throw new Error(`profile ${username}: ${pErr.message}`);
   }
-  creds[`DEMO_${s.key}_EMAIL`] = email;
+  creds[`DEMO_${s.key}_USERNAME`] = username;
   creds[`DEMO_${s.key}_PASSWORD`] = password;
 }
 upsertEnvFile(".env.demo.local", creds);

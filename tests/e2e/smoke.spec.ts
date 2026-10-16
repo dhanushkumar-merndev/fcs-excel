@@ -4,7 +4,7 @@ test("signed-out visitors are sent to sign in, which renders cleanly", async ({ 
   await page.goto("/leads");
   await expect(page).toHaveURL(/\/login\?next=%2Fleads/);
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Username")).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
   // No horizontal scroll at any width.
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

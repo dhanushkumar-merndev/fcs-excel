@@ -16,11 +16,11 @@ export const getStaffOrNull = cache(async (): Promise<Staff | null> => {
   if (!userId) return null;
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, is_active")
+    .select("id, full_name, username, role, is_active")
     .eq("id", userId)
     .maybeSingle();
   if (!profile || !profile.is_active) return null;
-  return { id: profile.id, fullName: profile.full_name, email: profile.email, role: profile.role as Role };
+  return { id: profile.id, fullName: profile.full_name, username: profile.username, role: profile.role as Role };
 });
 
 export const getCurrentStaff = cache(async (): Promise<Staff> => {

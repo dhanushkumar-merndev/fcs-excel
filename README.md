@@ -4,7 +4,7 @@ Lead management for an event catering and chef-booking business: import Meta lea
 
 **Stack:** Next.js 16 (App Router, Cache Components) · React 19 · TypeScript · Tailwind CSS 4 · Supabase (Auth, Postgres with Row Level Security, pg_cron, Storage, Realtime) · SheetJS · Vitest · Playwright.
 
-Business defaults: Asia/Kolkata time, dates as `DD MMM YYYY`, INR, India as the default phone country, at most 1,000 rows per import, invite-only staff.
+Business defaults: Asia/Kolkata time, dates as `DD MMM YYYY`, INR, India as the default phone country, at most 1,000 rows per import, invite-only staff who sign in with a username and password (nothing is emailed).
 
 ## Setup (development against the staging project)
 
@@ -38,12 +38,12 @@ The live project only ever receives the migrations and real staff. Demo data nev
 pnpm db:inspect --target live                               # check before changing anything
 pnpm db:migrate --target live
 pnpm auth:config --target live --site-url https://crm.your-domain.com
-pnpm env:pull --target live --site-url https://crm.your-domain.com   # writes .env.production.local
-pnpm bootstrap:admin --target live --email owner@your-domain.com --name "Owner Name"
+pnpm env:pull --target live                                         # writes .env.production.local
+pnpm bootstrap:admin --target live --username owner --name "Owner Name" [--password "…"]
 pnpm build && pnpm start
 ```
 
-`bootstrap:admin` prints a one-time link for setting the first admin's password. After that, the admin invites everyone else from **Team**. If a link can't be used, `pnpm staff:password --target live --email … [--password …]` sets a password on an existing staff account directly.
+`bootstrap:admin` creates the first admin and prints the username and password once. After that, the admin adds everyone else from **Team → Add member** (name, username, role, password) and sends them the details, for example on WhatsApp. Forgotten passwords are reset from **Team → Reset password**. Everyone can change their own password from the account menu. If no admin can sign in, run `pnpm staff:password --target live --user <username or email> [--username new-name] [--password …]`.
 
 **Current deployment:** https://fcs-crm-sales.vercel.app. This is the Vercel project `fcs-crm-sales` in the `fcs25` team. `vercel.json` sets the Next.js preset and runs functions in Mumbai (`bom1`), next to the Supabase project in `ap-south-1`. To redeploy, run `npx vercel deploy --prod`. `.vercelignore` keeps every `.env*` file out of the upload.
 
@@ -53,8 +53,7 @@ If you deploy to a host such as Vercel, set these variables in its dashboard ins
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser and server |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser and server. Safe to expose because RLS protects all data. |
-| `SUPABASE_SECRET_KEY` | **Server only.** Used for staff invites, bans, and storing original import files. |
-| `NEXT_PUBLIC_SITE_URL` | Base URL for invite and reset links |
+| `SUPABASE_SECRET_KEY` | **Server only.** Used for username sign-in, creating staff logins, password resets, bans, and storing original import files. |
 | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Recommended when running more than one instance |
 
 Never deploy `ACCESS_TOKEN`. It is an account-level token used only by the scripts in `scripts/`.
@@ -73,6 +72,8 @@ Never deploy `ACCESS_TOKEN`. It is an account-level token used only by the scrip
   - and is idempotent per request ID, so double-clicks and retries are safe.
 - Roles live in `profiles` and are managed only by admins. JWT and user metadata are never trusted for roles.
 - Deactivated staff lose all access immediately, and their login is also banned.
+
+**Sign-in:** staff use a username and password. Nothing is emailed: there are no invite, magic or reset links. Supabase Auth still keys logins by email, so the server looks up the username and signs in with the internal address behind it. Username-only accounts use `<username>@fcs-staff.invalid`, which can never receive mail. Usernames are unique and checked in Postgres (3–32 characters: a–z, 0–9, `.`, `_`, `-`).
 
 **Imports** (`src/lib/import/*`, `src/app/api/imports/*`):
 1. The browser parses the file for an instant preview. Each step has its own screen: sheet, column mapping, cleaning, duplicates, confirm.

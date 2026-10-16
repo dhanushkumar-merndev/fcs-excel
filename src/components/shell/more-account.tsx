@@ -1,13 +1,16 @@
 "use client";
 
-import { LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { ChevronRight, KeyRound, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { useState } from "react";
 import { ROLE_LABELS } from "@/lib/domain/labels";
 import { cn } from "@/lib/utils";
+import { ChangePasswordSheet } from "./change-password-sheet";
 import { useTheme, type ThemePref } from "./theme";
 import { Avatar, signOutNow } from "./user-menu";
 
-export function MoreAccount({ user }: { user: { fullName: string; email: string; role: string } }) {
+export function MoreAccount({ user }: { user: { fullName: string; username: string; role: string } }) {
   const { pref, setPref } = useTheme();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const options: { value: ThemePref; label: string; Icon: typeof Sun }[] = [
     { value: "light", label: "Light", Icon: Sun },
     { value: "dark", label: "Dark", Icon: Moon },
@@ -20,10 +23,20 @@ export function MoreAccount({ user }: { user: { fullName: string; email: string;
         <div className="min-w-0">
           <p className="truncate font-medium">{user.fullName}</p>
           <p className="truncate text-[13px] text-fg-muted">
-            {user.email} · {ROLE_LABELS[user.role]}
+            @{user.username} · {ROLE_LABELS[user.role]}
           </p>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => setPasswordOpen(true)}
+        className="flex h-14 items-center gap-3 rounded-2xl border border-line bg-surface px-4 text-left hover:bg-hover"
+      >
+        <KeyRound className="size-[18px] text-fg-muted" />
+        <span className="flex-1 text-[15px]">Change password</span>
+        <ChevronRight className="size-4 text-fg-subtle" />
+      </button>
+      <ChangePasswordSheet open={passwordOpen} onOpenChange={setPasswordOpen} />
       <div className="rounded-2xl border border-line bg-surface p-4">
         <p className="mb-2.5 text-[13px] font-medium">Appearance</p>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">

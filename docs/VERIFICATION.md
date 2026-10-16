@@ -11,7 +11,7 @@
 | `pnpm lint` | Clean |
 | `pnpm typecheck` | Clean |
 | `pnpm build` | Clean. 29 routes; all app pages are partial-prerendered. |
-| `pnpm test` | **60 / 60 passed** |
+| `pnpm test` | **67 / 67 passed** |
 | `pnpm test:e2e` (smoke) | **6 / 6 passed** (desktop and mobile) |
 
 **Live deployment, checked 15 Oct 2026 at https://fcs-crm-sales.vercel.app:**
@@ -44,6 +44,6 @@
 
 ## Known limits
 
-- Invite and reset links are shown to the admin to share, by copy or WhatsApp. The default Supabase email only reaches project members; configure custom SMTP to have them emailed automatically.
+- Staff sign in with a username and password. Nothing is emailed. Admins create logins and reset passwords from Team, and share them by copy or WhatsApp. Covered by `tests/db/username.test.ts` (backfill, format, uniqueness) and `tests/unit/username.test.ts`.
 - Revenue, ROAS, and cost per lead aren't reported, because ad spend isn't tracked. Recorded booking value is shown with its coverage.
 - Original import files are stored in a private bucket, accessible only through the server.

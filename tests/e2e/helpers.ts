@@ -15,11 +15,11 @@ function readEnv(file: string) {
 }
 
 export const demo = readEnv(".env.demo.local");
-export const hasDemo = Boolean(demo.DEMO_ADMIN_EMAIL);
+export const hasDemo = Boolean(demo.DEMO_ADMIN_USERNAME);
 
 export async function signIn(page: Page, who: "ADMIN" | "MANAGER" | "SALES_A" | "SALES_B") {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(demo[`DEMO_${who}_EMAIL`]);
+  await page.getByLabel("Username").fill(demo[`DEMO_${who}_USERNAME`]);
   await page.getByLabel("Password").fill(demo[`DEMO_${who}_PASSWORD`]);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login/);

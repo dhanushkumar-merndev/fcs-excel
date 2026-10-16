@@ -42,10 +42,16 @@ export function migrationFiles() {
     .map((f) => ({ name: f, sql: readFileSync(resolve(MIGRATIONS, f), "utf8") }));
 }
 
-export async function createDb() {
+/** Fresh database with the shim and the migrations; stopBefore leaves later ones for applyMigrations. */
+export async function createDb({ stopBefore }: { stopBefore?: string } = {}) {
   const db = await PGlite.create({ extensions: { pg_trgm } });
   await db.exec(SHIM);
-  for (const file of migrationFiles()) {
+  await applyMigrations(db, (name) => !stopBefore || name < stopBefore);
+  return db;
+}
+
+export async function applyMigrations(db: PGlite, include: (name: string) => boolean = () => true) {
+  for (const file of migrationFiles().filter((f) => include(f.name))) {
     // pg_cron is not available in WASM; the shim provides cron.schedule.
     const sql = file.sql.replace(/create extension if not exists pg_cron[^;]*;/i, "");
     try {
@@ -54,7 +60,6 @@ export async function createDb() {
       throw new Error(`Migration ${file.name} failed: ${(error as Error).message}`);
     }
   }
-  return db;
 }
 
 export type Db = Awaited<ReturnType<typeof createDb>>;
@@ -71,7 +76,7 @@ export async function asUser<T>(db: Db, userId: string | null, fn: (tx: Transact
 export async function createStaff(db: Db, id: string, role: "admin" | "manager" | "salesperson", name: string) {
   await db.query(`insert into auth.users (id, email) values ($1, $2)`, [id, `${name.toLowerCase()}@example.test`]);
   await db.query(
-    `insert into public.profiles (id, full_name, email, role) values ($1, $2, $3, $4)`,
-    [id, name, `${name.toLowerCase()}@example.test`, role],
+    `insert into public.profiles (id, full_name, email, username, role) values ($1, $2, $3, $4, $5)`,
+    [id, name, `${name.toLowerCase()}@example.test`, name.toLowerCase(), role],
   );
 }

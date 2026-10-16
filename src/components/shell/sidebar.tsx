@@ -19,7 +19,7 @@ export function Sidebar({
   items: NavKey[];
   businessName: string;
   overdueCount: number;
-  user: { fullName: string; email: string; role: string };
+  user: { fullName: string; username: string; role: string };
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useLocalStorageState("sidebar-collapsed", false);

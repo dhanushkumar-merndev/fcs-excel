@@ -8,7 +8,7 @@ const target = parseTarget(process.argv);
 const ref = projectRef(target);
 const staff = await query(
   ref,
-  `select p.email, p.role, p.is_active, u.email_confirmed_at is not null as confirmed, u.last_sign_in_at
+  `select p.username, p.full_name, p.role, p.is_active, u.email_confirmed_at is not null as confirmed, u.last_sign_in_at
      from public.profiles p join auth.users u on u.id = p.id order by p.created_at`,
   true,
 );

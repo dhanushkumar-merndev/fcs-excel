@@ -1,8 +1,10 @@
 /**
- * Creates the first admin (invite-only systems need one). Prints a one-time link to set a password.
- *   pnpm bootstrap:admin --target live --email you@example.com --name "Your Name" [--site-url https://crm.example.com]
+ * Creates the first admin (everyone else is added from Team). Username + password; nothing is emailed.
+ *   pnpm bootstrap:admin --target live --username owner --name "Your Name" [--password "…"]
+ * Without --password a random one is generated and printed once.
  */
 import { createClient } from "@supabase/supabase-js";
+import { generatePassword, isValidUsername, loginEmailFor, MIN_PASSWORD, normalizeUsername, USERNAME_RULES } from "../src/lib/auth/username";
 import { projectKeys } from "./supabase/keys";
 import { parseTarget, projectRef } from "./supabase/mgmt";
 
@@ -11,34 +13,42 @@ const arg = (name: string) => {
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 const target = parseTarget(process.argv);
-const email = arg("email")?.trim().toLowerCase();
+const username = normalizeUsername(arg("username") ?? "");
 const name = arg("name")?.trim();
-const siteUrl = (arg("site-url") ?? "http://localhost:3000").replace(/\/$/, "");
-if (!email || !name) {
-  console.error('Usage: pnpm bootstrap:admin --target live --email you@example.com --name "Your Name"');
+const password = arg("password") ?? generatePassword();
+if (!username || !name) {
+  console.error('Usage: pnpm bootstrap:admin --target live --username owner --name "Your Name" [--password "…"]');
+  process.exit(1);
+}
+if (!isValidUsername(username)) {
+  console.error(`Username: ${USERNAME_RULES}`);
+  process.exit(1);
+}
+if (password.length < MIN_PASSWORD) {
+  console.error(`Use a password of at least ${MIN_PASSWORD} characters.`);
   process.exit(1);
 }
 
 const keys = await projectKeys(projectRef(target));
 const admin = createClient(keys.url, keys.secret, { auth: { persistSession: false, autoRefreshToken: false } });
 
-const { data: existing } = await admin.from("profiles").select("id, role, is_active").ilike("email", email).maybeSingle();
+const { data: existing } = await admin.from("profiles").select("id, role, is_active").eq("username", username).maybeSingle();
 if (existing) {
-  console.log(`${email} is already a ${existing.role}${existing.is_active ? "" : " (inactive)"}. Nothing to do.`);
+  console.log(`@${username} is already a ${existing.role}${existing.is_active ? "" : " (inactive)"}. Use pnpm staff:password to reset it.`);
   process.exit(0);
 }
 
-let type: "invite" | "recovery" = "invite";
-let link = await admin.auth.admin.generateLink({ type: "invite", email });
-if (link.error) {
-  type = "recovery";
-  link = await admin.auth.admin.generateLink({ type: "recovery", email });
+const email = loginEmailFor(username);
+const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+if (error || !data.user) throw new Error(error?.message ?? "Couldn't create the admin user.");
+
+const { error: profileError } = await admin.from("profiles").insert({ id: data.user.id, full_name: name, email, username, role: "admin" });
+if (profileError) {
+  await admin.auth.admin.deleteUser(data.user.id);
+  throw new Error(`Profile insert failed: ${profileError.message}`);
 }
-if (link.error || !link.data.user) throw new Error(link.error?.message ?? "Couldn't create the admin user.");
 
-const { error } = await admin.from("profiles").insert({ id: link.data.user.id, full_name: name, email, role: "admin" });
-if (error) throw new Error(`Profile insert failed: ${error.message}`);
-await admin.from("audit_log").insert({ action: "admin_bootstrapped", entity_type: "profile", entity_id: link.data.user.id, payload: { email } });
-
-console.log(`Admin ${name} <${email}> created on ${target}.`);
-console.log(`Open this link once to set a password:\n${siteUrl}/auth/confirm?token_hash=${encodeURIComponent(link.data.properties.hashed_token)}&type=${type}`);
+console.log(`\nAdmin ${name} created on ${target}.`);
+console.log(`  Username: ${username}`);
+console.log(`  Password: ${password}`);
+console.log("\nSign in, then add the rest of the team from Team.");
