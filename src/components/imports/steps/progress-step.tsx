@@ -7,13 +7,21 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Stat } from "./review-step";
 
+export type Counts = { created: number; skipped: number; invalid: number; failed: number; pending: number; total: number; warnings?: number };
+
+/** A finished sheet when several sheets are imported one after another. */
+export type SheetResult = { sheet: string; batchId: string; counts: Counts };
+
 export type Progress = {
   phase: "idle" | "uploading" | "processing" | "done" | "error";
   batchId?: string;
   processed?: number;
   total?: number;
   message?: string;
-  counts?: { created: number; skipped: number; invalid: number; failed: number; pending: number; total: number; warnings?: number };
+  counts?: Counts;
+  /** The sheet being imported (index is 0-based). */
+  sheet?: { index: number; count: number; name: string };
+  results?: SheetResult[];
 };
 
 export function ProgressStep({ progress, onResume }: { progress: Progress; onResume: () => void }) {
@@ -25,6 +33,7 @@ export function ProgressStep({ progress, onResume }: { progress: Progress; onRes
       {progress.phase === "uploading" || progress.phase === "idle" ? (
         <div className="flex flex-col items-center py-6 text-center">
           <Spinner className="mb-3 size-6" />
+          <SheetLine progress={progress} />
           <p className="font-medium">Uploading and checking every row on the server…</p>
           <p className="mt-1 text-sm text-fg-muted">This usually takes a few seconds.</p>
         </div>
@@ -32,6 +41,7 @@ export function ProgressStep({ progress, onResume }: { progress: Progress; onRes
 
       {progress.phase === "processing" ? (
         <div className="py-4">
+          <SheetLine progress={progress} />
           <div className="mb-2 flex items-center justify-between text-sm">
             <p className="font-medium">Importing…</p>
             <p className="tabular text-fg-muted">
@@ -74,7 +84,7 @@ export function ProgressStep({ progress, onResume }: { progress: Progress; onRes
             <span className="mb-3 flex size-11 items-center justify-center rounded-full bg-tint-green text-tint-green-fg">
               <CircleCheck className="size-5" />
             </span>
-            <p className="text-lg font-semibold">Import complete</p>
+            <p className="text-lg font-semibold">{(progress.results?.length ?? 0) > 1 ? `${progress.results!.length} sheets imported` : "Import complete"}</p>
             <p className="tabular mt-1 text-sm text-fg-muted">
               {c.created} created + {c.skipped} skipped + {c.invalid} invalid + {c.failed} failed = {c.total} rows
             </p>
@@ -85,7 +95,40 @@ export function ProgressStep({ progress, onResume }: { progress: Progress; onRes
             <Stat label="Invalid" value={c.invalid} tone={c.invalid ? "red" : undefined} />
             <Stat label="Failed" value={c.failed} tone={c.failed ? "red" : undefined} />
           </div>
+          {(progress.results?.length ?? 0) > 1 ? (
+            <ul className="mt-5 divide-y divide-line overflow-hidden rounded-xl border border-line">
+              {progress.results!.map((r) => (
+                <li key={r.batchId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.sheet.trim()}</p>
+                    <p className="tabular text-[13px] text-fg-muted">
+                      {r.counts.created} created · {r.counts.skipped} skipped · {r.counts.invalid} invalid{r.counts.failed ? ` · ${r.counts.failed} failed` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Link href={`/leads?import=${r.batchId}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                      Leads
+                    </Link>
+                    <Link href={`/imports/${r.batchId}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+                      Results
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            {(progress.results?.length ?? 0) > 1 ? (
+              <>
+                <Link href="/leads?view=new_this_week" className={buttonVariants()}>
+                  View new leads
+                </Link>
+                <Link href="/imports" className={buttonVariants({ variant: "secondary" })}>
+                  All imports
+                </Link>
+              </>
+            ) : (
+              <>
             <Link href={`/leads?import=${progress.batchId}`} className={buttonVariants()}>
               View imported leads
             </Link>
@@ -97,9 +140,21 @@ export function ProgressStep({ progress, onResume }: { progress: Progress; onRes
                 <Download /> Error report
               </a>
             ) : null}
+              </>
+            )}
           </div>
         </div>
       ) : null}
     </Card>
+  );
+}
+
+function SheetLine({ progress }: { progress: Progress }) {
+  if (!progress.sheet || progress.sheet.count < 2) return null;
+  return (
+    <p className="mb-3 text-[13px] text-fg-muted">
+      Sheet {progress.sheet.index + 1} of {progress.sheet.count} · <span className="font-medium text-fg">{progress.sheet.name.trim()}</span>
+      {progress.results?.length ? ` · ${progress.results.length} done` : ""}
+    </p>
   );
 }

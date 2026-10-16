@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/states";
 import { formatCalendarDate } from "@/lib/domain/format";
 import { humanizeCode } from "@/lib/domain/labels";
 import type { DuplicateWarning } from "@/lib/import/duplicates";
+import { rowRef } from "@/lib/import/normalize";
 import type { Decision, PreparedImport, PreparedRow } from "@/lib/import/prepare";
 import { cn } from "@/lib/utils";
 import { Stat } from "./review-step";
@@ -135,7 +136,7 @@ function MatchSummary({ warning }: { warning: DuplicateWarning }) {
   if (warning.row) {
     return (
       <p className="text-[13px] text-fg-muted">
-        Row {warning.row.rowNumber}: {warning.row.name} · Event {warning.row.eventDate ? formatCalendarDate(warning.row.eventDate) : "unknown"}
+        {capitalize(warning.row.ref ?? `row ${warning.row.rowNumber}`)}: {warning.row.name} · Event {warning.row.eventDate ? formatCalendarDate(warning.row.eventDate) : "unknown"}
       </p>
     );
   }
@@ -159,7 +160,7 @@ function DuplicateCard({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-sm">
-            <span className="tabular text-fg-muted">Row {row.row.rowNumber}</span> · <span className="font-medium">{lead.customer_name}</span> ·{" "}
+            <span className="tabular text-fg-muted">{capitalize(rowRef(row.row))}</span> · <span className="font-medium">{lead.customer_name}</span> ·{" "}
             {humanizeCode(lead.occasion_code)} · Event {lead.event_date ? formatCalendarDate(lead.event_date) : lead.event_date_raw ? `“${lead.event_date_raw}”` : "unknown"}
           </p>
           <ul className="mt-2 flex flex-col gap-2">
@@ -192,3 +193,5 @@ function DuplicateCard({
     </li>
   );
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

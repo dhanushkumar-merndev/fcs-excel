@@ -1,31 +1,32 @@
 "use client";
 
-import { ArrowLeft, Check, Download, FileSpreadsheet, Upload } from "lucide-react";
+import { ArrowLeft, Check, Download, FileSpreadsheet, TriangleAlert, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { reportSessionExpired } from "@/components/shell/connection-watch";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/field";
 import { InlineAlert } from "@/components/ui/states";
 import { Spinner } from "@/components/ui/spinner";
 import type { WorkloadRow } from "@/lib/domain/types";
 import type { YearChoice } from "@/lib/import/dates";
 import type { ExistingLead } from "@/lib/import/duplicates";
 import { ImportFileError, parseImportFile, rowLimitError, type ParsedFile, type ParsedSheet } from "@/lib/import/parse";
-import { matchKeys, normalizeAll, prepareImport, type Decision } from "@/lib/import/prepare";
+import { decisionsForSheet, matchKeys, normalizeSheets, prepareImport, summarizeBySheet, type Decision } from "@/lib/import/prepare";
 import { autoMapHeaders, MAX_IMPORT_ROWS, missingRequired, type ColumnMapping } from "@/lib/import/template";
 import { cn } from "@/lib/utils";
 import { ConfirmStep } from "./steps/confirm-step";
 import { DuplicatesStep } from "./steps/duplicates-step";
 import { MappingStep } from "./steps/mapping-step";
-import { ProgressStep, type Progress } from "./steps/progress-step";
+import { ProgressStep, type Counts, type Progress, type SheetResult } from "./steps/progress-step";
 import { ReviewStep } from "./steps/review-step";
 
 type Step = "upload" | "sheet" | "map" | "review" | "duplicates" | "confirm" | "run";
 const STEPS: { key: Step; label: string }[] = [
   { key: "upload", label: "Upload" },
-  { key: "sheet", label: "Sheet" },
+  { key: "sheet", label: "Sheets" },
   { key: "map", label: "Columns" },
   { key: "review", label: "Clean & validate" },
   { key: "duplicates", label: "Duplicates" },
@@ -42,8 +43,9 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedFile | null>(null);
-  const [sheetName, setSheetName] = useState<string | null>(null);
-  const [mapping, setMapping] = useState<ColumnMapping>({});
+  const [selected, setSelected] = useState<string[]>([]);
+  const [mappings, setMappings] = useState<Record<string, ColumnMapping>>({});
+  const [mapSheet, setMapSheet] = useState<string | null>(null);
   const [yearChoice, setYearChoice] = useState<YearChoice>({ mode: "unresolved" });
   const [existing, setExisting] = useState<ExistingLead[] | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
@@ -52,16 +54,22 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
   const [reading, setReading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress>({ phase: "idle" });
-  const clientToken = useRef<string>(crypto.randomUUID());
+  // One idempotency token per sheet, so a retried or resumed import never creates a second batch.
+  const clientTokens = useRef<Record<string, string>>({});
   const running = useRef(false);
 
-  const sheet: ParsedSheet | null = useMemo(
-    () => parsed?.sheets.find((s) => s.name === sheetName) ?? null,
-    [parsed, sheetName],
-  );
+  const sheetsWithData = useMemo(() => parsed?.sheets.filter((s) => s.rows.length > 0) ?? [], [parsed]);
+  const chosen: ParsedSheet[] = useMemo(() => parsed?.sheets.filter((s) => selected.includes(s.name)) ?? [], [parsed, selected]);
+  const multi = chosen.length > 1;
   const normalized = useMemo(
-    () => (sheet && step !== "upload" && step !== "sheet" && step !== "map" ? normalizeAll(sheet.rows, mapping, yearChoice) : null),
-    [sheet, mapping, yearChoice, step],
+    () =>
+      chosen.length && step !== "upload" && step !== "sheet" && step !== "map"
+        ? normalizeSheets(
+            chosen.map((s) => ({ name: s.name, rows: s.rows, mapping: mappings[s.name] ?? {} })),
+            yearChoice,
+          )
+        : null,
+    [chosen, mappings, yearChoice, step],
   );
   const plan = useMemo(
     () => (normalized && existing ? prepareImport(normalized, existing, decisions) : null),
@@ -89,14 +97,14 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
       if (!withData.length) throw new ImportFileError("No data rows found. Check that the first row has the column headers and rows below it have values.");
       setFile(f);
       setParsed(result);
-      clientToken.current = crypto.randomUUID();
-      setExisting(null);
-      setDecisions({});
+      clientTokens.current = {};
+      setMappings({});
+      setProgress({ phase: "idle" });
       setYearChoice({ mode: "unresolved" });
       if (withData.length === 1) {
-        selectSheet(withData[0]);
+        chooseSheets(result, [withData[0].name]);
       } else {
-        setSheetName(null);
+        setSelected(withData.filter((s) => !rowLimitError(s.rows.length)).map((s) => s.name));
         setStep("sheet");
       }
     } catch (error) {
@@ -106,10 +114,21 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
     }
   }
 
-  function selectSheet(s: ParsedSheet) {
-    setSheetName(s.name);
-    setMapping(autoMapHeaders(s.headers));
+  function chooseSheets(source: ParsedFile, names: string[]) {
+    setSelected(names);
+    setMappings((prev) => {
+      const next = { ...prev };
+      for (const s of source.sheets) if (names.includes(s.name) && !next[s.name]) next[s.name] = autoMapHeaders(s.headers, s.rows);
+      return next;
+    });
+    setMapSheet(names[0] ?? null);
+    setExisting(null);
+    setDecisions({});
     setStep("map");
+  }
+
+  function toggleSheet(name: string) {
+    setSelected((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
   async function loadMatches() {
@@ -137,24 +156,34 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  /**
+   * Imports each chosen sheet as its own batch, in workbook order. Sheets run one after another so
+   * a lead repeated in a later sheet is caught by the database as already imported. Safe to call
+   * again after an interruption: finished sheets are skipped and the current one resumes.
+   */
   async function runImport() {
-    if (!file || !sheet || running.current) return;
+    if (!file || !chosen.length || running.current) return;
     running.current = true;
     setStep("run");
+    const results: SheetResult[] = [...(progress.results ?? [])];
+    let current: { batchId?: string; sheet?: Progress["sheet"] } = {};
     try {
-      let batchId = progress.batchId;
-      if (!batchId) {
-        setProgress({ phase: "uploading" });
+      for (const [index, sheet] of chosen.entries()) {
+        if (results.some((r) => r.sheet === sheet.name)) continue;
+        const sheetInfo = { index, count: chosen.length, name: sheet.name };
+        current = { sheet: sheetInfo };
+        const token = (clientTokens.current[sheet.name] ??= crypto.randomUUID());
+        setProgress({ phase: "uploading", sheet: sheetInfo, results });
         const form = new FormData();
         form.set("file", file);
         form.set(
           "meta",
           JSON.stringify({
-            clientToken: clientToken.current,
+            clientToken: token,
             sheetName: sheet.name,
-            mapping,
+            mapping: mappings[sheet.name] ?? {},
             yearChoice,
-            decisions,
+            decisions: decisionsForSheet(decisions, index, chosen.length),
             defaultOwnerId: ownerId || null,
           }),
         );
@@ -163,41 +192,45 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
         if (res.status === 401) reportSessionExpired();
         if (!res.ok) {
           if (json.code === "decisions_required") {
-            setProgress({ phase: "idle" });
+            setProgress({ phase: "idle", results });
             setExisting(null);
             setStep("duplicates");
-            setMatchError(json.message);
+            setMatchError(multi ? `${sheet.name.trim()}: ${json.message}` : json.message);
             return;
           }
-          throw new Error(json.message ?? "The import couldn't be started.");
+          throw new Error(multi ? `${sheet.name.trim()}: ${json.message ?? "The import couldn't be started."}` : (json.message ?? "The import couldn't be started."));
         }
-        batchId = json.batchId as string;
-      }
-      setProgress({ phase: "processing", batchId, processed: 0, total: sheet.rows.length });
-      for (let attempt = 0; ; ) {
-        const res = await fetch(`/api/imports/${batchId}/process`, { method: "POST" });
-        const json = await res.json().catch(() => ({}));
-        if (res.status === 401) reportSessionExpired();
-        if (!res.ok) {
-          if (res.status >= 500 && attempt < 3) {
-            attempt++;
-            await new Promise((r) => setTimeout(r, 1500 * attempt));
-            continue;
+        const batchId = json.batchId as string;
+        current = { batchId, sheet: sheetInfo };
+        setProgress({ phase: "processing", batchId, sheet: sheetInfo, results, processed: 0, total: sheet.rows.length });
+        for (let attempt = 0; ; ) {
+          const res = await fetch(`/api/imports/${batchId}/process`, { method: "POST" });
+          const json = await res.json().catch(() => ({}));
+          if (res.status === 401) reportSessionExpired();
+          if (!res.ok) {
+            if (res.status >= 500 && attempt < 3) {
+              attempt++;
+              await new Promise((r) => setTimeout(r, 1500 * attempt));
+              continue;
+            }
+            throw new Error(json.message ?? "Processing stopped.");
           }
-          throw new Error(json.message ?? "Processing stopped.");
-        }
-        attempt = 0;
-        const done = json.total - json.pending;
-        setProgress({ phase: "processing", batchId, processed: done, total: json.total, counts: json });
-        if (json.pending === 0) {
-          setProgress({ phase: "done", batchId, processed: json.total, total: json.total, counts: json });
-          router.refresh();
-          break;
+          attempt = 0;
+          setProgress({ phase: "processing", batchId, sheet: sheetInfo, results, processed: json.total - json.pending, total: json.total, counts: json });
+          if (json.pending === 0) {
+            results.push({ sheet: sheet.name, batchId, counts: json });
+            break;
+          }
         }
       }
+      const counts = sumCounts(results.map((r) => r.counts));
+      setProgress({ phase: "done", batchId: results.at(-1)?.batchId, results, processed: counts.total, total: counts.total, counts });
+      router.refresh();
     } catch (error) {
       setProgress((p) => ({
         ...p,
+        ...current,
+        results,
         phase: "error",
         message:
           error instanceof TypeError
@@ -211,10 +244,14 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
     }
   }
 
-  const visibleSteps = STEPS.filter((s) => s.key !== "sheet" || (parsed?.sheets.filter((x) => x.rows.length > 0).length ?? 0) > 1);
+  const visibleSteps = STEPS.filter((s) => s.key !== "sheet" || sheetsWithData.length > 1);
   const stepIndex = visibleSteps.findIndex((s) => s.key === step);
-  const missing = missingRequired(mapping);
-  const limit = sheet ? rowLimitError(sheet.rows.length) : null;
+  const mapTarget = chosen.find((s) => s.name === mapSheet) ?? chosen[0] ?? null;
+  const sheetsMissing = chosen.filter((s) => missingRequired(mappings[s.name] ?? {}).length > 0);
+  const limit = chosen.length === 1 ? rowLimitError(chosen[0].rows.length) : null;
+  const chosenRows = chosen.reduce((n, s) => n + s.rows.length, 0);
+  const selectable = sheetsWithData.filter((s) => !rowLimitError(s.rows.length));
+  const selectedRows = (parsed?.sheets ?? []).filter((s) => selected.includes(s.name)).reduce((n, s) => n + s.rows.length, 0);
 
   return (
     <div>
@@ -222,15 +259,16 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
         <Link href="/imports" className="flex size-9 items-center justify-center rounded-full text-fg-muted hover:bg-hover hover:text-fg" aria-label="Back to imports">
           <ArrowLeft className="size-4" />
         </Link>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-[22px] font-semibold tracking-tight md:text-2xl">Import leads</h1>
           {file ? (
-            <p className="text-sm text-fg-muted">
+            <p className="truncate text-sm text-fg-muted">
               {file.name}
-              {sheet ? ` · ${sheet.name} · ${sheet.rows.length.toLocaleString("en-IN")} data rows` : ""}
+              {step !== "sheet" && chosen.length === 1 ? ` · ${chosen[0].name.trim()} · ${chosen[0].rows.length.toLocaleString("en-IN")} data rows` : ""}
+              {step !== "sheet" && multi ? ` · ${chosen.length} sheets · ${chosenRows.toLocaleString("en-IN")} data rows` : ""}
             </p>
           ) : (
-            <p className="text-sm text-fg-muted">Excel (.xlsx) or CSV, up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows.</p>
+            <p className="text-sm text-fg-muted">Excel (.xlsx) or CSV, up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows per sheet.</p>
           )}
         </div>
       </div>
@@ -263,43 +301,123 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
       ) : null}
 
       {step === "sheet" && parsed ? (
-        <Card className="p-5">
-          <h2 className="mb-1 text-[15px] font-semibold">Choose a worksheet</h2>
-          <p className="mb-4 text-sm text-fg-muted">This workbook has more than one sheet with data.</p>
-          <div className="flex flex-col gap-2">
-            {parsed.sheets.map((s) => (
-              <button
-                key={s.name}
-                type="button"
-                disabled={s.rows.length === 0}
-                onClick={() => selectSheet(s)}
-                className="flex items-center justify-between rounded-xl border border-line px-4 py-3 text-left hover:bg-hover disabled:opacity-50"
-              >
-                <span className="flex items-center gap-3">
-                  <FileSpreadsheet className="size-4 text-fg-muted" />
-                  <span className="font-medium">{s.name}</span>
-                </span>
-                <span className="tabular text-sm text-fg-muted">{s.rows.length ? `${s.rows.length.toLocaleString("en-IN")} rows` : "Empty"}</span>
-              </button>
-            ))}
-          </div>
-        </Card>
+        <>
+          <Card className="p-4 sm:p-5">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-semibold">Choose worksheets</h2>
+                <p className="mt-0.5 text-sm text-fg-muted">
+                  Tick every sheet to import. Each sheet gets its own column matching, and a lead that appears in more than one sheet is imported once.
+                </p>
+              </div>
+              {selectable.length > 1 ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setSelected(selected.length === selectable.length ? [] : selectable.map((s) => s.name))}
+                >
+                  {selected.length === selectable.length ? "Clear all" : "Select all"}
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2">
+              {parsed.sheets.map((s) => {
+                const tooMany = Boolean(rowLimitError(s.rows.length));
+                const disabled = s.rows.length === 0 || tooMany;
+                const checked = selected.includes(s.name);
+                return (
+                  <label
+                    key={s.name}
+                    className={cn(
+                      "flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
+                      disabled ? "cursor-not-allowed border-line opacity-50" : "cursor-pointer hover:bg-hover",
+                      checked ? "border-fg-subtle bg-subtle" : "border-line",
+                    )}
+                  >
+                    <Checkbox checked={checked} disabled={disabled} onChange={() => toggleSheet(s.name)} />
+                    <FileSpreadsheet className="size-4 shrink-0 text-fg-muted" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{s.name.trim()}</span>
+                    <span className={cn("tabular shrink-0 text-sm", tooMany ? "text-danger" : "text-fg-muted")}>
+                      {s.rows.length === 0
+                        ? "Empty"
+                        : tooMany
+                          ? `${s.rows.length.toLocaleString("en-IN")} rows · over ${MAX_IMPORT_ROWS.toLocaleString("en-IN")}`
+                          : `${s.rows.length.toLocaleString("en-IN")} rows`}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {sheetsWithData.some((s) => rowLimitError(s.rows.length)) ? (
+              <p className="mt-3 text-[13px] text-fg-muted">
+                Sheets over {MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows can&apos;t be imported in one go — split them into smaller sheets first.
+              </p>
+            ) : null}
+          </Card>
+          <StepNav
+            onBack={() => setStep("upload")}
+            onNext={() => chooseSheets(parsed, parsed.sheets.filter((s) => selected.includes(s.name)).map((s) => s.name))}
+            nextDisabled={selected.length === 0}
+            nextLabel={selected.length > 1 ? `Continue with ${selected.length} sheets` : "Continue"}
+            hint={selected.length ? `${selected.length} ${selected.length === 1 ? "sheet" : "sheets"} · ${selectedRows.toLocaleString("en-IN")} rows selected` : "Tick at least one sheet."}
+          />
+        </>
       ) : null}
 
-      {step === "map" && sheet ? (
+      {step === "map" && mapTarget ? (
         <>
           {limit ? (
             <InlineAlert tone="danger" className="mb-4" title="Too many rows">
               {limit}
             </InlineAlert>
           ) : null}
-          <MappingStep sheet={sheet} mapping={mapping} onChange={setMapping} />
+          {multi ? (
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Sheets">
+              {chosen.map((s) => {
+                const missing = missingRequired(mappings[s.name] ?? {}).length > 0;
+                const active = s.name === mapTarget.name;
+                return (
+                  <button
+                    key={s.name}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setMapSheet(s.name)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] transition-colors",
+                      active ? "border-fg bg-fg text-canvas" : "border-line hover:bg-hover",
+                    )}
+                  >
+                    {missing ? <TriangleAlert className="size-3.5 text-danger" aria-label="Needs mapping" /> : <Check className="size-3.5" aria-label="Ready" />}
+                    {s.name.trim()}
+                    <span className="tabular opacity-70">{s.rows.length.toLocaleString("en-IN")}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <MappingStep
+            key={mapTarget.name}
+            sheet={mapTarget}
+            title={multi ? mapTarget.name.trim() : undefined}
+            mapping={mappings[mapTarget.name] ?? {}}
+            onChange={(m) => setMappings((prev) => ({ ...prev, [mapTarget.name]: m }))}
+          />
           <StepNav
-            onBack={() => setStep(parsed && parsed.sheets.filter((s) => s.rows.length).length > 1 ? "sheet" : "upload")}
+            onBack={() => setStep(sheetsWithData.length > 1 ? "sheet" : "upload")}
             onNext={() => setStep("review")}
-            nextDisabled={missing.length > 0 || Boolean(limit)}
+            nextDisabled={sheetsMissing.length > 0 || Boolean(limit)}
             nextLabel="Clean & validate"
-            hint={missing.length ? `Map the required columns: ${missing.join(", ").replace("full_name", "Customer name").replace("phone", "Phone")}` : undefined}
+            hint={
+              sheetsMissing.length
+                ? multi
+                  ? `Map Customer name and Phone for: ${sheetsMissing.map((s) => s.name.trim()).join(", ")}`
+                  : `Map the required columns: ${missingRequired(mappings[mapTarget.name] ?? {}).join(", ").replace("full_name", "Customer name").replace("phone", "Phone")}`
+                : multi
+                  ? "Each sheet was matched on its own — check any sheet by tapping it above."
+                  : undefined
+            }
           />
         </>
       ) : null}
@@ -309,7 +427,11 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
           <ReviewStep rows={normalized} yearChoice={yearChoice} onYearChoice={setYearChoice} />
           <StepNav
             onBack={() => setStep("map")}
-            onNext={() => setStep("duplicates")}
+            onNext={() => {
+              setExisting(null);
+              setMatchError(null);
+              setStep("duplicates");
+            }}
             nextDisabled={normalized.every((r) => !r.valid)}
             nextLabel="Check duplicates"
             hint={normalized.every((r) => !r.valid) ? "No valid rows to import. Fix the file and upload it again." : undefined}
@@ -348,13 +470,40 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
 
       {step === "confirm" && plan && file ? (
         <>
-          <ConfirmStep plan={plan} fileName={file.name} workload={workload} ownerId={ownerId} onOwner={setOwnerId} yearChoice={yearChoice} />
-          <StepNav onBack={() => setStep("duplicates")} onNext={runImport} nextLabel={`Import ${plan.summary.toCreate.toLocaleString("en-IN")} leads`} nextDisabled={plan.summary.toCreate === 0 && plan.summary.skippedExact === 0} />
+          <ConfirmStep
+            plan={plan}
+            fileName={file.name}
+            sheets={multi ? summarizeBySheet(plan) : undefined}
+            workload={workload}
+            ownerId={ownerId}
+            onOwner={setOwnerId}
+            yearChoice={yearChoice}
+          />
+          <StepNav
+            onBack={() => setStep("duplicates")}
+            onNext={runImport}
+            nextLabel={`Import ${plan.summary.toCreate.toLocaleString("en-IN")} leads${multi ? ` from ${chosen.length} sheets` : ""}`}
+            nextDisabled={plan.summary.toCreate === 0 && plan.summary.skippedExact === 0}
+          />
         </>
       ) : null}
 
       {step === "run" ? <ProgressStep progress={progress} onResume={runImport} /> : null}
     </div>
+  );
+}
+
+function sumCounts(list: Counts[]): Counts {
+  return list.reduce<Counts>(
+    (sum, c) => ({
+      created: sum.created + c.created,
+      skipped: sum.skipped + c.skipped,
+      invalid: sum.invalid + c.invalid,
+      failed: sum.failed + c.failed,
+      pending: sum.pending + c.pending,
+      total: sum.total + c.total,
+    }),
+    { created: 0, skipped: 0, invalid: 0, failed: 0, pending: 0, total: 0 },
   );
 }
 
@@ -424,7 +573,7 @@ function UploadStep({ reading, error, onFile }: { reading: boolean; error: strin
               <Upload className="size-5" />
             </span>
             <p className="font-medium">Drop your Meta leads file here, or tap to choose</p>
-            <p className="mt-1 text-sm text-fg-muted">.xlsx or .csv · up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} data rows · 10 MB</p>
+            <p className="mt-1 text-sm text-fg-muted">.xlsx or .csv · up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} data rows per sheet · 10 MB</p>
           </>
         )}
         <input

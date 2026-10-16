@@ -1,3 +1,5 @@
+import { isBlankCell, type RawRow } from "./cells";
+
 /** The exact Meta lead export template, in order. */
 export const TEMPLATE_COLUMNS = [
   { key: "id", header: "id", label: "Source lead ID", group: "source" },
@@ -54,18 +56,19 @@ const ALIASES: Partial<Record<TemplateKey, string[]>> = {
   is_organic: ["is organic", "organic"],
 };
 
-/** Maps file headers to template columns, tolerant of case, whitespace and trailing spaces. */
-export function autoMapHeaders(headers: string[]): ColumnMapping {
-  const byNormalized = new Map<string, string>();
-  for (const h of headers) {
-    const n = normalizeHeader(h);
-    if (n && !byNormalized.has(n)) byNormalized.set(n, h);
-  }
+/**
+ * Maps file headers to template columns, tolerant of case, whitespace and trailing spaces.
+ * Given the rows, the best-named column that actually has data wins: some exports carry both an
+ * empty "event_date" and a filled "Event Date ".
+ */
+export function autoMapHeaders(headers: string[], rows: RawRow[] = []): ColumnMapping {
+  const hasData = (header: string) => rows.some((r) => !isBlankCell(r.cells[header]));
   const used = new Set<string>();
   const mapping: ColumnMapping = {};
   for (const col of TEMPLATE_COLUMNS) {
-    const candidates = [normalizeHeader(col.header), ...(ALIASES[col.key] ?? []).map(normalizeHeader)];
-    const hit = candidates.map((c) => byNormalized.get(c)).find((h) => h !== undefined && !used.has(h));
+    const names = [normalizeHeader(col.header), ...(ALIASES[col.key] ?? []).map(normalizeHeader)];
+    const candidates = names.flatMap((name) => headers.filter((h) => !used.has(h) && normalizeHeader(h) === name));
+    const hit = candidates.find(hasData) ?? candidates[0];
     mapping[col.key] = hit ?? null;
     if (hit) used.add(hit);
   }

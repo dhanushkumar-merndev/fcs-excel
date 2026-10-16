@@ -1,4 +1,4 @@
-import type { NormalizedRow } from "./normalize";
+import { rowRef, type NormalizedRow } from "./normalize";
 
 /** An existing lead returned by import_find_matches. */
 export type ExistingLead = {
@@ -35,7 +35,7 @@ export type DuplicateWarning = {
     ownerName: string | null;
   };
   /** Earlier row in this file */
-  row?: { rowNumber: number; name: string; eventDate: string | null };
+  row?: { rowNumber: number; ref: string; name: string; eventDate: string | null };
 };
 
 export type DuplicateReview = {
@@ -129,8 +129,8 @@ export function reviewDuplicates(rows: NormalizedRow[], existing: ExistingLead[]
       review.defaultDecision = "skip";
       review.warnings.push({
         kind: "duplicate_in_file",
-        reason: `Repeats row ${earlierSame.rowNumber} of this file (same source lead).`,
-        row: { rowNumber: earlierSame.rowNumber, name: earlierSame.lead.customer_name, eventDate: earlierSame.lead.event_date },
+        reason: `Repeats ${rowRef(earlierSame)} of this file (same source lead).`,
+        row: { rowNumber: earlierSame.rowNumber, ref: rowRef(earlierSame), name: earlierSame.lead.customer_name, eventDate: earlierSame.lead.event_date },
       });
       continue;
     }
@@ -152,9 +152,9 @@ export function reviewDuplicates(rows: NormalizedRow[], existing: ExistingLead[]
       review.warnings.push({
         kind: same ? "possible_duplicate_event" : "repeat_customer",
         reason: same
-          ? `Same phone and event date as row ${other.rowNumber} of this file.`
-          : `Same phone number as row ${other.rowNumber} of this file.`,
-        row: { rowNumber: other.rowNumber, name: other.lead.customer_name, eventDate: other.lead.event_date },
+          ? `Same phone and event date as ${rowRef(other)} of this file.`
+          : `Same phone number as ${rowRef(other)} of this file.`,
+        row: { rowNumber: other.rowNumber, ref: rowRef(other), name: other.lead.customer_name, eventDate: other.lead.event_date },
       });
     }
     seenPhones.set(phone, [...(seenPhones.get(phone) ?? []), row]);

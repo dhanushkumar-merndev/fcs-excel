@@ -48,6 +48,54 @@ export function normalizeAll(rows: RawRow[], mapping: ColumnMapping, yearChoice:
   return rows.map((r) => normalizeRow(r, mapping, yearChoice));
 }
 
+/** Row keys of sheet i (0-based) start at (i + 1) × stride; no worksheet has 10 million rows. */
+export const SHEET_ROW_STRIDE = 10_000_000;
+
+export type SheetInput = { name: string; rows: RawRow[]; mapping: ColumnMapping };
+
+/**
+ * Cleans several sheets as one preview. Each sheet keeps its own column mapping, and row keys are
+ * made unique across sheets so duplicates are found between sheets too. A single sheet keeps its
+ * plain spreadsheet row numbers.
+ */
+export function normalizeSheets(sheets: SheetInput[], yearChoice: YearChoice): NormalizedRow[] {
+  if (sheets.length === 1) return normalizeAll(sheets[0].rows, sheets[0].mapping, yearChoice);
+  return sheets.flatMap((s, i) =>
+    normalizeAll(s.rows, s.mapping, yearChoice).map((r) => ({
+      ...r,
+      rowNumber: (i + 1) * SHEET_ROW_STRIDE + r.rowNumber,
+      sheet: s.name,
+      sourceRow: r.rowNumber,
+    })),
+  );
+}
+
+/** The decisions that belong to sheet `index`, keyed by its own spreadsheet rows (as the server expects). */
+export function decisionsForSheet(decisions: Record<number, Decision>, index: number, sheetCount: number): Record<number, Decision> {
+  if (sheetCount === 1) return decisions;
+  const base = (index + 1) * SHEET_ROW_STRIDE;
+  return Object.fromEntries(
+    Object.entries(decisions)
+      .map(([key, d]) => [Number(key) - base, d] as const)
+      .filter(([row]) => row > 0 && row < SHEET_ROW_STRIDE),
+  );
+}
+
+/** Per-sheet counts of a combined plan, for the confirmation screen. */
+export function summarizeBySheet(plan: PreparedImport) {
+  const bySheet = new Map<string, { sheet: string; total: number; toCreate: number; skipped: number; invalid: number }>();
+  for (const r of plan.rows) {
+    const key = r.row.sheet ?? "";
+    const s = bySheet.get(key) ?? { sheet: key, total: 0, toCreate: 0, skipped: 0, invalid: 0 };
+    s.total++;
+    if (r.status === "pending") s.toCreate++;
+    else if (r.status === "invalid") s.invalid++;
+    else s.skipped++;
+    bySheet.set(key, s);
+  }
+  return [...bySheet.values()];
+}
+
 /**
  * Combines validation, duplicate review and the reviewer's decisions into the final plan.
  * Shared by the preview (browser) and the authoritative server-side preparation.

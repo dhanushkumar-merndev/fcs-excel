@@ -4,11 +4,12 @@ import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
 import type { WorkloadRow } from "@/lib/domain/types";
 import type { YearChoice } from "@/lib/import/dates";
-import type { PreparedImport } from "@/lib/import/prepare";
+import type { PreparedImport, summarizeBySheet } from "@/lib/import/prepare";
 
 export function ConfirmStep({
   plan,
   fileName,
+  sheets,
   workload,
   ownerId,
   onOwner,
@@ -16,6 +17,8 @@ export function ConfirmStep({
 }: {
   plan: PreparedImport;
   fileName: string;
+  /** Per-sheet breakdown when several sheets are imported together. */
+  sheets?: ReturnType<typeof summarizeBySheet>;
   workload: WorkloadRow[];
   ownerId: string;
   onOwner: (id: string) => void;
@@ -46,7 +49,32 @@ export function ConfirmStep({
             <dd className="tabular">{s.total.toLocaleString("en-IN")}</dd>
           </div>
         </dl>
+        {sheets ? (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-line">
+            <table className="w-full text-sm">
+              <thead className="bg-subtle text-left text-xs text-fg-muted">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Sheet</th>
+                  <th className="px-3 py-2 text-right font-medium">New</th>
+                  <th className="px-3 py-2 text-right font-medium">Skipped</th>
+                  <th className="px-3 py-2 text-right font-medium">Invalid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sheets.map((s) => (
+                  <tr key={s.sheet} className="border-t border-line">
+                    <td className="max-w-48 truncate px-3 py-2">{s.sheet.trim()}</td>
+                    <td className="tabular px-3 py-2 text-right font-medium">{s.toCreate.toLocaleString("en-IN")}</td>
+                    <td className="tabular px-3 py-2 text-right text-fg-muted">{s.skipped.toLocaleString("en-IN")}</td>
+                    <td className="tabular px-3 py-2 text-right text-fg-muted">{s.invalid.toLocaleString("en-IN")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         <p className="mt-4 text-[13px] text-fg-muted">
+          {sheets ? "Each sheet is saved as its own import, in this order — leads repeated in a later sheet are skipped and linked. " : ""}
           {yearChoice.mode === "unresolved"
             ? "Dates without a year are imported as “Date needs review”."
             : yearChoice.mode === "fixed"

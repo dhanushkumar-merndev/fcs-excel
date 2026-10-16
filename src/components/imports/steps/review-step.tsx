@@ -95,7 +95,9 @@ export function ReviewStep({
                   <tbody>
                     {yearless.map((r) => (
                       <tr key={r.rowNumber} className="border-t border-line">
-                        <td className="tabular px-3 py-1.5 text-fg-muted">{r.rowNumber}</td>
+                        <td className="tabular px-3 py-1.5 text-fg-muted">
+                          <RowCell row={r} />
+                        </td>
                         <td className="px-3 py-1.5">“{r.lead.event_date_raw}”</td>
                         <td className="px-3 py-1.5">
                           {r.lead.event_date ? (
@@ -158,7 +160,9 @@ export function ReviewStep({
             <tbody>
               {pageRows.map((r) => (
                 <tr key={r.rowNumber} className={cn("border-b border-line align-top last:border-0", !r.valid && "bg-tint-red/40")}>
-                  <td className="tabular px-3 py-2 text-fg-muted">{r.rowNumber}</td>
+                  <td className="tabular px-3 py-2 text-fg-muted">
+                    <RowCell row={r} />
+                  </td>
                   <td className="px-3 py-2">
                     {r.lead.customer_name || <span className="text-danger">Missing</span>}
                     {r.lead.external_lead_id_raw ? (
@@ -244,5 +248,15 @@ export function Stat({ label, value, tone }: { label: string; value: number; ton
         {value.toLocaleString("en-IN")}
       </p>
     </div>
+  );
+}
+
+/** Spreadsheet row, with its sheet when several sheets are previewed together. */
+function RowCell({ row }: { row: NormalizedRow }) {
+  return (
+    <>
+      {row.sourceRow ?? row.rowNumber}
+      {row.sheet ? <span className="block max-w-28 truncate text-[11px] text-fg-subtle" title={row.sheet}>{row.sheet}</span> : null}
+    </>
   );
 }

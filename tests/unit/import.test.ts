@@ -29,7 +29,11 @@ describe("phone", () => {
     expect(normalizePhone(s(""))).toMatchObject({ status: "missing" });
     expect(normalizePhone(s("12345"))).toMatchObject({ status: "invalid" });
     expect(normalizePhone(s("call me"))).toMatchObject({ status: "invalid" });
-    expect(normalizePhone(n(919991999189, "9.19992E+11"))).toMatchObject({ status: "invalid" });
+    // Excel keeps the full number even when it shows 9.19992E+11; text in that form has lost digits.
+    expect(normalizePhone(n(919991999189, "9.19992E+11"))).toMatchObject({ status: "valid", e164: "+919991999189", raw: "9.19992E+11" });
+    expect(normalizePhone(n(9845738576, "9845738576"))).toMatchObject({ status: "valid", e164: "+919845738576" });
+    expect(normalizePhone(s("9.19992E+11"))).toMatchObject({ status: "invalid" });
+    expect(normalizePhone(n(9.19992e15, "9.19992E+15"))).toMatchObject({ status: "invalid" });
     expect(normalizePhone(s("+91 99919"))).toMatchObject({ status: "invalid" });
   });
 });

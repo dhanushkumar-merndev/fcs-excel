@@ -16,18 +16,28 @@ export function normalizePhone(input: RawCell | string | null | undefined, defau
   const raw = cellText(cell).trim();
   if (!raw) return { status: "missing", raw };
 
-  if (cell?.t === "n" || /^\d(\.\d+)?e\+?\d+$/i.test(raw)) {
-    const num = typeof cell?.v === "number" ? cell.v : Number(raw);
-    if (/e\+?\d+$/i.test(raw) || !Number.isSafeInteger(num)) {
+  let stored: string | null = null;
+  if (cell?.t === "n" && typeof cell.v === "number") {
+    // Excel keeps whole numbers of up to 15 digits exactly, even when it displays them as
+    // 9.19886E+11, so the stored value is used. Fractional or longer numbers have lost digits.
+    if (!Number.isSafeInteger(cell.v) || Math.abs(cell.v).toString().length > 15) {
       return {
         status: "invalid",
         raw,
-        message: "Excel converted this phone number to scientific notation and lost digits. Format the column as Text and re-export.",
+        message: "Excel stored this phone number as a rounded number, so digits are missing. Format the column as Text and re-export.",
       };
     }
+    stored = Math.abs(cell.v).toString();
+  } else if (/^\d(\.\d+)?e\+?\d+$/i.test(raw)) {
+    // Text such as "9.19886E+11" (e.g. a CSV saved from Excel) has really lost the digits.
+    return {
+      status: "invalid",
+      raw,
+      message: "This phone number was saved in scientific notation, so digits are missing. Format the column as Text in Excel and re-export.",
+    };
   }
 
-  let text = raw
+  let text = (stored ?? raw)
     .replace(/^(p|tel|phone)\s*:\s*/i, "")
     .replace(/[\s \-().\/]/g, "");
   if (text.startsWith("00")) text = `+${text.slice(2)}`;

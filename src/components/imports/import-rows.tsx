@@ -129,7 +129,7 @@ export function ImportRowsTable({
                               L-{w.lead.number} {w.lead.name}
                             </Link>
                           ) : w.row ? (
-                            `(row ${w.row.rowNumber})`
+                            `(${w.row.ref ?? `row ${w.row.rowNumber}`})`
                           ) : null}
                         </p>
                       ))}

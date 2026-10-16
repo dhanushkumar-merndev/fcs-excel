@@ -40,7 +40,11 @@ export type NormalizedLead = {
 };
 
 export type NormalizedRow = {
+  /** Unique key for the row in this preview or import (the spreadsheet row for a single sheet). */
   rowNumber: number;
+  /** Set when several sheets are previewed together: the sheet and its own row number. */
+  sheet?: string;
+  sourceRow?: number;
   /** Original values keyed by the file's own headers, as displayed. */
   original: Record<string, string>;
   lead: NormalizedLead;
@@ -49,6 +53,13 @@ export type NormalizedRow = {
   /** Set when the event date had no year (resolved or not). */
   yearless?: { day: number; month: number; resolved: boolean };
 };
+
+const EVENT_KEYS: TemplateKey[] = ["occasion", "guests", "menu", "event_date", "event_address"];
+
+/** "row 27", or "CHEF ON DEMAND · row 27" when several sheets are previewed together. */
+export function rowRef(row: Pick<NormalizedRow, "rowNumber" | "sheet" | "sourceRow">) {
+  return row.sheet ? `${row.sheet.trim()} · row ${row.sourceRow ?? row.rowNumber}` : `row ${row.rowNumber}`;
+}
 
 const text = (cell: RawCell | undefined) => {
   const value = cellText(cell).replace(/\s+/g, " ").trim();
@@ -211,7 +222,10 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
     !menu && "menu",
     !address && "address",
   ].filter(Boolean) as string[];
-  if (missing.length) {
+  // Only event-enquiry forms are expected to have event details; other forms (franchise,
+  // webinar…) map none of these columns and aren't flagged for lacking them.
+  const eventForm = EVENT_KEYS.some((k) => mapping[k]);
+  if (eventForm && missing.length) {
     flags.add("event_details_missing");
     issues.push({
       field: "event",
