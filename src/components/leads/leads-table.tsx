@@ -148,7 +148,7 @@ export function LeadsTable({
         <table className="w-full min-w-[880px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs font-medium text-fg-muted">
-              <th scope="col" className="w-10 py-2.5 pl-4">
+              <th scope="col" className="w-12 py-2.5 pr-3 pl-4">
                 <Checkbox
                   aria-label="Select all on this page"
                   checked={allChecked}
@@ -186,7 +186,7 @@ export function LeadsTable({
                     checked && "bg-subtle",
                   )}
                 >
-                  <td className="py-3 pl-4">
+                  <td className="py-3 pr-3 pl-4">
                     <Checkbox aria-label={`Select ${lead.customer_name}`} checked={checked} onChange={() => onToggle(lead.id)} />
                   </td>
                   <td className="max-w-64 py-3 pr-3">

@@ -57,7 +57,7 @@ function toSheet(name: string, grid: (RawCell | undefined)[][], rowNumbers: numb
   return { name, headers, headerRow: rowNumbers[headerIndex], rows };
 }
 
-function parseCsv(text: string): ParsedFile {
+export function parseCsv(text: string): ParsedFile {
   const clean = text.replace(/^﻿/, "");
   const result = Papa.parse<string[]>(clean, { skipEmptyLines: false, header: false });
   if (result.errors.some((e) => e.type === "Quotes")) {

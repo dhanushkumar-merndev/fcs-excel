@@ -19,7 +19,7 @@ const SHIM = `
   create function auth.uid() returns uuid language sql stable as $$
     select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
   $$;
-  grant usage on schema auth to anon, authenticated;
+  grant usage on schema auth to anon, authenticated, service_role;
   grant execute on function auth.uid() to anon, authenticated;
   create schema extensions;
   grant usage on schema extensions to anon, authenticated;
@@ -63,6 +63,15 @@ export async function applyMigrations(db: PGlite, include: (name: string) => boo
 }
 
 export type Db = Awaited<ReturnType<typeof createDb>>;
+
+/** Runs fn with the server's secret key (service_role, no user), like the sheet sync does. */
+export async function asService<T>(db: Db, fn: (tx: Transaction) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.exec(`set local role service_role`);
+    await tx.query(`select set_config('request.jwt.claim.sub', '', true)`);
+    return fn(tx);
+  });
+}
 
 /** Runs fn as an authenticated end user (RLS enforced), like a PostgREST request. */
 export async function asUser<T>(db: Db, userId: string | null, fn: (tx: Transaction) => Promise<T>): Promise<T> {

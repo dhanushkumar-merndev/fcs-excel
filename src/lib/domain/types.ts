@@ -135,6 +135,7 @@ export type ImportBatchRow = {
   finished_at: string | null;
   last_heartbeat_at: string | null;
   storage_path: string | null;
+  origin: "upload" | "sheet_sync";
 };
 
 export type NotificationRow = {

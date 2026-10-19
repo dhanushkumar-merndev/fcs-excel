@@ -141,6 +141,7 @@ export const SKIP_REASON_LABELS: Record<string, string> = {
   exact_duplicate: "Already imported (same source lead ID)",
   duplicate_in_file: "Repeated earlier in this file",
   skipped_by_reviewer: "Skipped during duplicate review",
+  sync_possible_duplicate: "Possible duplicate event — skipped by Google Sheet sync",
   cancelled: "Import discarded",
 };
 

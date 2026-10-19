@@ -20,6 +20,8 @@
     "staff:password": "tsx scripts/set-password.ts",
     "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
+    "sync:setup": "tsx scripts/sync-setup.ts",
+    "sync:sheet": "tsx scripts/sync-sheet.ts",
     "fixtures": "tsx scripts/fixtures/generate.ts"
   },
   "dependencies": {

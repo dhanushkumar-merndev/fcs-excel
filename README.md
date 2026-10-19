@@ -58,6 +58,30 @@ If you deploy to a host such as Vercel, set these variables in its dashboard ins
 
 Never deploy `ACCESS_TOKEN`. It is an account-level token used only by the scripts in `scripts/`.
 
+## Google Sheet sync
+
+New rows in the Meta leads Google Sheet are imported every 10 minutes, through the same cleaning and duplicate checks as a manual import. The top bar shows **Synced 3 min ago** to everyone, and admins and managers can also press **Sync now**. Each sync that finds new rows appears under **Imports** as "Google Sheet sync", with a report for every row.
+
+- **Access.** The sheet is shared as *Anyone with the link → Viewer*. The CRM downloads its CSV export and can never change the sheet. Anyone who has the link can read the sheet, so don't post it anywhere.
+- **Schedule.** Supabase `pg_cron` + `pg_net` call `POST /api/sync/sheet` with a secret. Both are free. Vercel Cron isn't used because the Hobby plan only runs it daily. The secret is kept in Supabase Vault, and only its hash is stored in `public.sheet_sync`. No env vars are needed.
+- **Efficiency.**
+  - An unchanged sheet costs one download and one row update.
+  - Normally only rows added since the last run are read.
+  - If someone edits rows that were already synced, those rows are rechecked with index lookups.
+  - Each run handles at most 2,000 new rows, and a backlog continues on the next run.
+- **Duplicates.**
+  - A lead already in the CRM, including one imported from a file, is skipped.
+  - A possible duplicate (same phone and same event) is skipped and listed in the import report.
+  - A repeat customer (same phone, different event) is imported.
+- **Failures.** A failed run changes no data, and the chip turns red. After 3 failed runs in a row, admins get a notification.
+
+```bash
+pnpm db:migrate --target live
+pnpm sync:setup --target live --sheet "<sheet link with #gid=…>" --actor <admin username>   # saved, disabled
+pnpm sync:sheet --target live                  # dry run: counts only, changes nothing
+pnpm sync:setup --target live --enable         # start syncing (--disable pauses)
+```
+
 ## How it works
 
 **Permissions are enforced in Postgres.**
@@ -108,6 +132,7 @@ Never deploy `ACCESS_TOKEN`. It is an account-level token used only by the scrip
 | `pnpm test:e2e` | Playwright at 360 px and 1440 px. Workflow specs need a seeded staging project. |
 | `pnpm db:projects` / `db:inspect` / `db:migrate` | Supabase Management API tooling (`--target staging\|live`) |
 | `pnpm env:pull` / `auth:config` / `bootstrap:admin` / `seed:demo` | Environment and auth setup, first admin, demo data |
+| `pnpm sync:setup` / `sync:sheet` | Google Sheet sync: configure and schedule it, or dry-run what the next sync would import |
 | `pnpm fixtures` | Regenerates the import test files in `tests/fixtures/` |
 
 ## Project layout
@@ -117,6 +142,7 @@ supabase/migrations/   schema, RLS, workflow RPCs, imports, search/reports, remi
 src/app/(app)/         dashboard, leads, follow-ups, imports, reports, team, settings, more
 src/app/api/           import pipeline, exports, dial tracking
 src/lib/import/        parser, cleaning rules, duplicate detection (shared by browser and server)
+src/lib/sheet-sync/    Google Sheet sync: what to import each run, CSV download, run against the database
 src/components/        UI kit, shell, leads, imports, reports, team
 tests/unit, tests/db   Vitest (cleaning rules, exports, permissions, workflows, full import pipeline)
 tests/e2e              Playwright

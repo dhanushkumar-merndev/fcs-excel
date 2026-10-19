@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/ui/states";
 import { formatCalendarDate, formatDateTime, formatDue } from "@/lib/domain/format";
 import { humanizeCode } from "@/lib/domain/labels";
 import type { FollowUpRow, WorkloadRow } from "@/lib/domain/types";
-import { cn } from "@/lib/utils";
+import { cn, formatCount } from "@/lib/utils";
 
 export type FollowUpListItem = FollowUpRow & {
   lead: { id: string; customer_name: string; phone_e164: string; stage: string; version: number; lead_number: number; occasion_code: string | null; event_date: string | null };
@@ -30,6 +30,9 @@ export function FollowUpsView(props: {
   manager: boolean;
   userId: string;
   items: FollowUpListItem[];
+  total: number;
+  page: number;
+  size: number;
   counts: { overdue: number; today: number; upcoming: number };
   workload: WorkloadRow[];
 }) {
@@ -40,18 +43,22 @@ export function FollowUpsView(props: {
   );
 }
 
-function View({ tab, person, manager, items, counts, workload }: Parameters<typeof FollowUpsView>[0]) {
+function View({ tab, person, manager, items, total, page, size, counts, workload }: Parameters<typeof FollowUpsView>[0]) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const actions = useLeadActions();
 
-  const go = (key: string, value: string) => {
+  const go = (key: string, value: string, resetPage = true) => {
     const p = new URLSearchParams(searchParams.toString());
     p.set(key, value);
-    startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: false }));
+    if (resetPage) p.delete("page");
+    startTransition(() => router.replace(`${pathname}?${p.toString()}`, { scroll: key === "page" }));
   };
+  const pages = Math.max(1, Math.ceil(total / size));
+  const from = total === 0 ? 0 : (page - 1) * size + 1;
+  const to = Math.min(total, page * size);
 
   const tabs: { key: Tab; label: string; count?: number; tone?: string }[] = [
     { key: "overdue", label: "Overdue", count: counts.overdue, tone: "red" },
@@ -179,6 +186,32 @@ function View({ tab, person, manager, items, counts, workload }: Parameters<type
           </ul>
         )}
       </div>
+
+      {total > 0 ? (
+        <div className="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-fg-muted sm:flex-row md:sticky md:bottom-0 md:z-20 md:mt-2 md:border-t md:border-line md:bg-canvas/95 md:py-3 md:backdrop-blur">
+          <p className="tabular">
+            Showing {formatCount(from)}–{formatCount(to)} of {formatCount(total)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Select aria-label="Rows per page" className="h-9 w-auto" value={String(size)} onChange={(e) => go("size", e.target.value)}>
+              {[25, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n} per page
+                </option>
+              ))}
+            </Select>
+            <Button variant="secondary" size="sm" disabled={page <= 1 || pending} onClick={() => go("page", String(page - 1), false)}>
+              Previous
+            </Button>
+            <span className="tabular px-1">
+              {page} / {pages}
+            </span>
+            <Button variant="secondary" size="sm" disabled={page >= pages || pending} onClick={() => go("page", String(page + 1), false)}>
+              Next
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

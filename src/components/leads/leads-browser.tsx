@@ -290,7 +290,7 @@ function Browser({
       </div>
 
       {total > 0 ? (
-        <div className="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-fg-muted sm:flex-row">
+        <div className="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-fg-muted sm:flex-row md:sticky md:bottom-0 md:z-20 md:mt-2 md:border-t md:border-line md:bg-canvas/95 md:py-3 md:backdrop-blur">
           <p className="tabular">
             Showing {formatCount(from)}–{formatCount(to)} of {formatCount(total)}
           </p>

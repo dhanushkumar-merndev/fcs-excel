@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ImportStatusBadge } from "@/components/imports/status";
 import { PageContainer, PageHeader } from "@/components/shell/page";
+import { SyncNowButton } from "@/components/shell/sheet-sync-status";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/card";
 import { EmptyState, PermissionDenied } from "@/components/ui/states";
@@ -11,6 +12,7 @@ import { getCurrentStaff } from "@/lib/auth/dal";
 import { formatDateTime } from "@/lib/domain/format";
 import { importName } from "@/lib/domain/labels";
 import { can } from "@/lib/domain/permissions";
+import { SHEET_SYNC_COLUMNS, type SheetSyncStatus } from "@/lib/domain/sheet-sync";
 import type { ImportBatchRow } from "@/lib/domain/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,6 +26,9 @@ export default function ImportsPage() {
         description="Every upload with who imported it, when, and what happened to each row."
         actions={
           <>
+            <Suspense fallback={null}>
+              <SheetSyncAction />
+            </Suspense>
             <a href="/api/imports/template" className={buttonVariants({ variant: "secondary" })}>
               <Download /> Template
             </a>
@@ -38,6 +43,16 @@ export default function ImportsPage() {
       </Suspense>
     </PageContainer>
   );
+}
+
+/** "Sync sheet now", once Google Sheet sync is set up and on. */
+async function SheetSyncAction() {
+  const staff = await getCurrentStaff();
+  if (!can(staff.role, "import")) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from("sheet_sync").select(SHEET_SYNC_COLUMNS).eq("id", 1).maybeSingle();
+  const status = data as SheetSyncStatus | null;
+  return status?.enabled ? <SyncNowButton /> : null;
 }
 
 type Batch = ImportBatchRow & { uploader: { full_name: string } | null; owner: { full_name: string } | null };
