@@ -50,6 +50,7 @@ export async function getTeam(): Promise<ProfileRow[]> {
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, username, phone, role, is_active, invited_at, deactivated_at")
+    .is("deleted_at", null)
     .order("full_name");
   return (data ?? []) as ProfileRow[];
 }

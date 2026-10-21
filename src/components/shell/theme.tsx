@@ -15,7 +15,7 @@ function apply(pref: ThemePref) {
 function subscribe(onChange: () => void) {
   const mql = window.matchMedia("(prefers-color-scheme: dark)");
   const onSystem = () => {
-    if ((document.documentElement.dataset.themePref ?? "system") === "system") apply("system");
+    if ((document.documentElement.dataset.themePref ?? "dark") === "system") apply("system");
     onChange();
   };
   mql.addEventListener("change", onSystem);
@@ -30,8 +30,8 @@ function subscribe(onChange: () => void) {
 export function useTheme() {
   const pref = useSyncExternalStore(
     subscribe,
-    () => (document.documentElement.dataset.themePref as ThemePref | undefined) ?? "system",
-    () => "system" as ThemePref,
+    () => (document.documentElement.dataset.themePref as ThemePref | undefined) ?? "dark",
+    () => "dark" as ThemePref,
   );
   const setPref = useCallback((next: ThemePref) => {
     try {

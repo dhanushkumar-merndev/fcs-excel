@@ -1,9 +1,9 @@
 "use client";
 
-import { Copy, Ellipsis, KeyRound, MessageCircle, RefreshCw, UserPlus } from "lucide-react";
+import { Copy, Ellipsis, KeyRound, MessageCircle, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { addStaff, changeRole, resetStaffPassword, setActive } from "@/actions/team";
+import { addStaff, changeRole, deleteStaff, resetStaffPassword, setActive } from "@/actions/team";
 import { useRunAction } from "@/components/leads/use-run-action";
 import { ChangePasswordSheet } from "@/components/shell/change-password-sheet";
 import { PageHeader } from "@/components/shell/page";
@@ -52,7 +52,7 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
   const [resetError, setResetError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [ownPasswordOpen, setOwnPasswordOpen] = useState(false);
-  const [confirm, setConfirm] = useState<{ member: Member; action: "deactivate" | "reactivate" } | { member: Member; action: "role"; role: Role } | null>(null);
+  const [confirm, setConfirm] = useState<{ member: Member; action: "deactivate" | "reactivate" | "delete" } | { member: Member; action: "role"; role: Role } | null>(null);
   const [busy, setBusy] = useState(false);
 
   function openAdd() {
@@ -115,9 +115,11 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
     const result =
       confirm.action === "role"
         ? await run(() => changeRole({ requestId, userId: confirm.member.id, role: confirm.role }), { success: "Role updated" })
-        : await run(() => setActive({ requestId, userId: confirm.member.id, active: confirm.action === "reactivate" }), {
-            success: confirm.action === "reactivate" ? "Reactivated" : "Deactivated — access removed",
-          });
+        : confirm.action === "delete"
+          ? await run(() => deleteStaff({ requestId, userId: confirm.member.id }), { success: "Deleted — their history is kept" })
+          : await run(() => setActive({ requestId, userId: confirm.member.id, active: confirm.action === "reactivate" }), {
+              success: confirm.action === "reactivate" ? "Reactivated" : "Deactivated — access removed",
+            });
     setBusy(false);
     if (result.ok) setConfirm(null);
   }
@@ -193,6 +195,9 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
                       ) : (
                         <MenuItem onSelect={() => setConfirm({ member: m, action: "reactivate" })}>Reactivate</MenuItem>
                       )}
+                      <MenuItem tone="danger" icon={<Trash2 />} onSelect={() => setConfirm({ member: m, action: "delete" })}>
+                        Delete
+                      </MenuItem>
                     </>
                   ) : null}
                 </MenuContent>
@@ -357,28 +362,40 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
       <ConfirmDialog
         open={Boolean(confirm)}
         onOpenChange={(o) => !busy && !o && setConfirm(null)}
-        tone={confirm?.action === "deactivate" ? "danger" : "primary"}
+        tone={confirm?.action === "deactivate" || confirm?.action === "delete" ? "danger" : "primary"}
         loading={busy}
         onConfirm={confirmAction}
         title={
           confirm?.action === "deactivate"
             ? `Deactivate ${confirm.member.full_name}?`
-            : confirm?.action === "reactivate"
-              ? `Reactivate ${confirm.member.full_name}?`
-              : confirm?.action === "role"
-                ? `Make ${confirm.member.full_name} ${ROLE_LABELS[confirm.role].toLowerCase()}?`
-                : ""
+            : confirm?.action === "delete"
+              ? `Delete ${confirm.member.full_name}?`
+              : confirm?.action === "reactivate"
+                ? `Reactivate ${confirm.member.full_name}?`
+                : confirm?.action === "role"
+                  ? `Make ${confirm.member.full_name} ${ROLE_LABELS[confirm.role].toLowerCase()}?`
+                  : ""
         }
         description={
           confirm?.action === "deactivate"
             ? `They lose access immediately and are signed out. Their ${confirm.member.open_leads} open leads stay assigned to them — reassign them from Leads. Past notes and calls keep their name.`
-            : confirm?.action === "reactivate"
-              ? "They can sign in again with their existing password."
-              : confirm?.action === "role"
-                ? ROLE_HELP[confirm.role]
-                : undefined
+            : confirm?.action === "delete"
+              ? `They're removed from the team and can't sign in. Past calls, notes and lead history keep their name. @${confirm.member.username} becomes free to reuse. This can't be undone.`
+              : confirm?.action === "reactivate"
+                ? "They can sign in again with their existing password."
+                : confirm?.action === "role"
+                  ? ROLE_HELP[confirm.role]
+                  : undefined
         }
-        confirmLabel={confirm?.action === "deactivate" ? "Deactivate" : confirm?.action === "reactivate" ? "Reactivate" : "Change role"}
+        confirmLabel={
+          confirm?.action === "deactivate"
+            ? "Deactivate"
+            : confirm?.action === "delete"
+              ? "Delete"
+              : confirm?.action === "reactivate"
+                ? "Reactivate"
+                : "Change role"
+        }
       />
     </>
   );

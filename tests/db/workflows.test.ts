@@ -370,3 +370,38 @@ describe("reports and reminders", () => {
     expect(visible.map((r) => (r as Row).id)).toContain(lead);
   });
 });
+
+describe("deleting staff", () => {
+  const SALES_D = "00000000-0000-4000-8000-0000000000d1";
+
+  it("refuses while they still own open work", async () => {
+    await createStaff(db, SALES_D, "salesperson", "Deepa");
+    const lead = await createLead(SALES_D, "+919800000444", "Kiran");
+    await rpc(SALES_D, "add_note", { p_request_id: randomUUID(), p_lead_id: lead, p_body: "Called, wants a quote" });
+    await expect(rpc(ADMIN, "admin_delete_staff", { p_request_id: randomUUID(), p_user_id: SALES_D })).rejects.toThrow(
+      /Reassign Deepa's 1 open lead/,
+    );
+    await rpc(ADMIN, "assign_leads", { p_request_id: randomUUID(), p_lead_ids: [lead], p_owner_id: SALES_A });
+  });
+
+  it("archives the member, keeps their history and frees the username", async () => {
+    const requestId = randomUUID();
+    const result = await rpc<{ email: string }>(ADMIN, "admin_delete_staff", { p_request_id: requestId, p_user_id: SALES_D });
+    expect(result.email).toMatch(/^deleted-[0-9a-f]{24}@fcs-staff\.invalid$/);
+    expect(await rpc(ADMIN, "admin_delete_staff", { p_request_id: requestId, p_user_id: SALES_D })).toMatchObject(result);
+
+    const [profile] = await select<Row>(ADMIN, `select full_name, username, is_active, deleted_at from public.profiles where id = $1`, [SALES_D]);
+    expect(profile).toMatchObject({ full_name: "Deepa", is_active: false });
+    expect(profile?.deleted_at).not.toBeNull();
+    expect(profile?.username).not.toBe("deepa");
+    expect(await select(ADMIN, `select 1 from public.lead_notes where author_id = $1`, [SALES_D])).toHaveLength(1);
+    expect(await select(SALES_D, `select 1 from public.leads`)).toHaveLength(0);
+
+    await createStaff(db, "00000000-0000-4000-8000-0000000000d2", "salesperson", "Deepa");
+  });
+
+  it("only admins can delete, and never themselves", async () => {
+    await expect(rpc(MANAGER, "admin_delete_staff", { p_request_id: randomUUID(), p_user_id: SALES_B })).rejects.toThrow(/Only an admin/);
+    await expect(rpc(ADMIN, "admin_delete_staff", { p_request_id: randomUUID(), p_user_id: ADMIN })).rejects.toThrow(/your own account/);
+  });
+});

@@ -152,6 +152,39 @@ export async function setActive(input: { requestId: string; userId: string; acti
   return ok({ active: parsed.data.active });
 }
 
+/**
+ * Deleting archives the member: they leave the team and can't sign in, while their calls, notes
+ * and lead history keep their name. The username and login address are released for reuse.
+ */
+export async function deleteStaff(input: { requestId: string; userId: string }): Promise<ActionResult<null>> {
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate.error;
+  const parsed = z.object({ requestId: z.string().uuid(), userId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return invalid("Invalid request.");
+  if (parsed.data.userId === gate.staff.id) return invalid("You can't delete your own account.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_delete_staff", {
+    p_request_id: parsed.data.requestId,
+    p_user_id: parsed.data.userId,
+  });
+  if (error) return fromDbError(error);
+  const { email } = data as { email: string };
+  const { error: authError } = await createAdminClient().auth.admin.updateUserById(parsed.data.userId, {
+    email,
+    email_confirm: true,
+    ban_duration: "876000h",
+  });
+  refresh();
+  if (authError) {
+    return {
+      ok: false,
+      code: "unknown",
+      message: "Removed from the team and their data access is gone, but their login couldn't be fully closed. Try again.",
+    };
+  }
+  return ok(null);
+}
+
 export async function updateMyName(fullName: string): Promise<ActionResult<null>> {
   const parsed = z.string().trim().min(1).max(120).safeParse(fullName);
   if (!parsed.success) return invalid("Enter your name.");
