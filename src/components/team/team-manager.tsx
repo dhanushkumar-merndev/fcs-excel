@@ -187,7 +187,7 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
                   ) : null}
                   {m.id !== currentUserId ? (
                     <>
-                      <MenuSeparator />
+                      {m.is_active ? <MenuSeparator /> : null}
                       {m.is_active ? (
                         <MenuItem tone="danger" onSelect={() => setConfirm({ member: m, action: "deactivate" })}>
                           Deactivate
