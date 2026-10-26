@@ -1,7 +1,6 @@
 # FCS CRM
 
 Lead management for an event catering and chef-booking business: import Meta lead-form exports, assign leads, call and follow up, move enquiries through sales stages, and report on performance.
-
 **Stack:** Next.js 16 (App Router, Cache Components) · React 19 · TypeScript · Tailwind CSS 4 · Supabase (Auth, Postgres with Row Level Security, pg_cron, Storage, Realtime) · SheetJS · Vitest · Playwright.
 
 Business defaults: Asia/Kolkata time, dates as `DD MMM YYYY`, INR, India as the default phone country, at most 1,000 rows per import, invite-only staff who sign in with a username and password (nothing is emailed).
