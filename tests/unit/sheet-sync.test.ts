@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { syncHealth, type SheetSyncStatus } from "@/lib/domain/sheet-sync";
-import { parseSheetUrl, sheetCsvUrl } from "@/lib/sheet-sync/fetch";
+import { parseSheetUrl, parseTabList, sheetCsvUrl } from "@/lib/sheet-sync/fetch";
 import { batchToken, planSheetSync, SheetSyncError, type SyncLookups, type SyncState } from "@/lib/sheet-sync/plan";
 
 const HEADER = "id,created_time,full_name,phone";
@@ -71,7 +71,14 @@ describe("sheet sync planning", () => {
   it("stops on a sheet whose header row lost a required column", async () => {
     const { lookups } = emptyCrm();
     await expect(planSheetSync("id,full_name\nl:1,Asha", START, lookups)).rejects.toThrow(SheetSyncError);
-    await expect(planSheetSync("", START, lookups)).rejects.toThrow(/no header row/);
+  });
+
+  it("treats an empty tab, or one with only a header row, as nothing to import", async () => {
+    const { lookups } = emptyCrm();
+    for (const csv of ["", "id,full_name,phone"]) {
+      const plan = await planSheetSync(csv, START, lookups);
+      expect(plan).toMatchObject({ kind: "changed", chunks: [], summary: { sheetRows: 0 } });
+    }
   });
 
   it("derives a stable UUID per batch, so a retried run reuses its batch", () => {
@@ -95,6 +102,8 @@ describe("sheet links", () => {
 describe("sync status label", () => {
   const base: SheetSyncStatus = {
     enabled: true,
+    interval_minutes: 10,
+    all_tabs: true,
     running_since: null,
     last_synced_at: "2026-10-19T08:40:00Z",
     last_finished_at: null,
@@ -119,5 +128,18 @@ describe("sync status label", () => {
     expect(syncHealth({ ...base, enabled: false }, null)).toMatchObject({ tint: "gray", label: "Sync paused" });
     expect(syncHealth({ ...base, running_since: "2026-10-19T08:50:00Z" }, at("2026-10-19T08:50:30Z"))).toMatchObject({ running: true, label: "Syncing…" });
     expect(syncHealth({ ...base, last_synced_at: null }, null)).toMatchObject({ label: "Waiting for first sync" });
+  });
+});
+
+describe("sheet tab list", () => {
+  it("reads every tab's name and gid from the sheet's HTML view, in order", () => {
+    const html = String.raw`items.push({name: "FRANCHISE PARTNER ", pageUrl: "https:\/\/docs.google.com\/x?headers\x3dtrue&gid=0", gid: "0",initialSheet: false});
+      items.push({name: "Priya\x27s \u0022AI\u0022 tab", pageUrl: "https:\/\/docs.google.com\/x?gid=702333688", gid: "702333688"});
+      items.push({name: "FRANCHISE PARTNER ", pageUrl: "u", gid: "0"});`;
+    expect(parseTabList(html)).toEqual([
+      { gid: "0", name: "FRANCHISE PARTNER " },
+      { gid: "702333688", name: `Priya's "AI" tab` },
+    ]);
+    expect(parseTabList("<html>sign in</html>")).toEqual([]);
   });
 });

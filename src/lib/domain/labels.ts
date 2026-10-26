@@ -52,7 +52,8 @@ export const menuLabel = humanizeCode;
  */
 export function guestRangeLabel(raw: string | null | undefined) {
   if (!raw) return "—";
-  const value = raw.trim();
+  // "1_-_25_members", "50–100 guests": the unit adds nothing next to "Guests".
+  const value = raw.trim().replace(/[_\s]*(members|guests|people|persons|pax)$/i, "");
   const range = value.match(/^(\d+)\s*_*\s*[-–to]+\s*_*\s*(\d+)$/i);
   if (range) return `${range[1]}–${range[2]}`;
   const more = value.match(/^(more|greater)[_\s]+than[_\s]+(\d+)$/i);

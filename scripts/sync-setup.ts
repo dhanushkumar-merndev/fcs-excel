@@ -1,6 +1,8 @@
 /**
- * Sets up the Google Sheet sync: which sheet, who imports, and the every-10-minutes schedule
- * (pg_cron + pg_net, both free on Supabase). The cron secret lives only in Vault and, hashed, in
+ * Sets up the Google Sheet sync: which sheet, who imports, and the schedule (pg_cron + pg_net,
+ * both free on Supabase). The job fires every 5 minutes and calls the app only when the interval
+ * chosen in the app (Imports → Google Sheet sync) has passed. After this, everything else — the
+ * sheet, its tabs, how often — can be changed in the app. The cron secret lives only in Vault and, hashed, in
  * public.sheet_sync — never in git, the app's env or this script's output.
  *
  *   pnpm sync:setup --target live --sheet "<sheet link>" --actor <username> [--app-url https://…]
@@ -38,23 +40,26 @@ const dq = (text: string) => {
 const [table] = await query<{ ok: boolean }>(ref, `select to_regclass('public.sheet_sync') is not null as ok`, true);
 if (!table?.ok) throw new Error(`public.sheet_sync doesn't exist on ${target}. Run pnpm db:migrate --target ${target} first.`);
 
-const [current] = await query<{ sheet_id: string | null; sheet_gid: string | null; actor: string | null; has_secret: boolean; enabled: boolean }>(
+const [current] = await query<{ sheet_id: string | null; actor: string | null; has_secret: boolean; enabled: boolean }>(
   ref,
-  `select s.sheet_id, s.sheet_gid, p.username as actor, s.cron_secret_sha256 is not null as has_secret, s.enabled
+  `select s.sheet_id, p.username as actor, s.cron_secret_sha256 is not null as has_secret, s.enabled
      from public.sheet_sync s left join public.profiles p on p.id = s.actor_id where s.id = 1`,
   true,
 );
 
 const updates: string[] = [];
+const preamble: string[] = [];
 
 const sheetArg = arg("sheet");
 if (sheetArg) {
   const sheet = parseSheetUrl(sheetArg);
   if (!sheet) throw new Error("--sheet must be a Google Sheets link (…/spreadsheets/d/<id>/edit#gid=<tab>).");
-  updates.push(`sheet_id = ${dq(sheet.sheetId)}`, `sheet_gid = ${sheet.gid ? dq(sheet.gid) : "null"}`);
-  // A different sheet or tab starts from the top; leads already in the CRM are still recognised and skipped.
-  if (sheet.sheetId !== current?.sheet_id || sheet.gid !== current?.sheet_gid) {
-    updates.push("content_hash = null", "prefix_hash = null", "processed_through_row = 0", "has_more = false");
+  updates.push(`sheet_id = ${dq(sheet.sheetId)}`);
+  // A different sheet starts from the top (every tab is found on the next run); leads already in
+  // the CRM are still recognised and skipped.
+  if (sheet.sheetId !== current?.sheet_id) {
+    updates.push("all_tabs = true");
+    preamble.push("delete from public.sheet_sync_tabs;");
   }
 } else if (!current?.sheet_id) {
   throw new Error('No sheet is set yet. Pass --sheet "<Google Sheets link>".');
@@ -91,7 +96,8 @@ const upsertSecret = (name: string, value: string) => `
     perform vault.create_secret(${dq(value)}, ${dq(name)});
   end if;`;
 
-// The job does nothing (no HTTP call) while sync is disabled.
+// The job does nothing (no HTTP call) while sync is disabled or not due yet. Keep in step with
+// supabase/migrations/20261026100000_sheet_sync_tabs.sql.
 const command = `
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_sync_url'),
@@ -100,7 +106,11 @@ const command = `
       'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_sync_cron_secret')),
     body := '{}'::jsonb,
     timeout_milliseconds := 60000)
-  where exists (select 1 from public.sheet_sync where id = 1 and enabled)`;
+  where exists (
+    select 1 from public.sheet_sync
+     where id = 1 and enabled
+       and (last_started_at is null
+            or last_started_at <= now() - make_interval(mins => interval_minutes) + interval '1 minute'))`;
 
 await query(
   ref,
@@ -109,19 +119,20 @@ await query(
      ${upsertSecret("sheet_sync_url", endpoint)}
      ${secret ? upsertSecret("sheet_sync_cron_secret", secret) : ""}
    end $setup$;
+   ${preamble.join("\n")}
    ${updates.length ? `update public.sheet_sync set ${updates.join(", ")}, updated_at = now() where id = 1;` : ""}
-   select cron.schedule(${dq(JOB)}, '*/10 * * * *', ${dq(command)});`,
+   select cron.schedule(${dq(JOB)}, '*/5 * * * *', ${dq(command)});`,
 );
 
-const [after] = await query<{ sheet_id: string; sheet_gid: string | null; actor: string; enabled: boolean }>(
+const [after] = await query<{ sheet_id: string; actor: string; enabled: boolean }>(
   ref,
-  `select s.sheet_id, s.sheet_gid, p.username as actor, s.enabled
+  `select s.sheet_id, p.username as actor, s.enabled
      from public.sheet_sync s join public.profiles p on p.id = s.actor_id where s.id = 1`,
   true,
 );
 console.log(`Google Sheet sync on ${target} (${ref}):`);
-console.log(`  Sheet:    ${after.sheet_id}${after.sheet_gid ? ` (tab gid ${after.sheet_gid})` : " (first tab)"}`);
+console.log(`  Sheet:    ${after.sheet_id} (tabs and interval are set in the app: Imports → Google Sheet sync)`);
 console.log(`  Imports as: @${after.actor}`);
-console.log(`  Calls:    ${endpoint} every 10 minutes`);
+console.log(`  Calls:    ${endpoint} (checked every 5 minutes, runs at the chosen interval)`);
 console.log(`  Secret:   ${secret ? "new secret stored in Vault" : "unchanged"}`);
 console.log(`  Status:   ${after.enabled ? "ENABLED — new rows are imported" : "disabled (run with --enable after a dry run)"}`);

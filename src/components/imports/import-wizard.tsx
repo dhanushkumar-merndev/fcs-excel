@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, Check, Download, FileSpreadsheet, TriangleAlert, Upload } from "lucide-react";
+import { ArrowLeft, Check, Download, FileSpreadsheet, Sheet, TriangleAlert, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { reportSessionExpired } from "@/components/shell/connection-watch";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/field";
+import { Checkbox, Input } from "@/components/ui/field";
 import { InlineAlert } from "@/components/ui/states";
 import { Spinner } from "@/components/ui/spinner";
 import type { WorkloadRow } from "@/lib/domain/types";
@@ -85,6 +85,31 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [progress.phase]);
+
+  /** Downloads every tab of a Google Sheet (as .xlsx, via the server) and continues as if it were uploaded. */
+  async function onSheetLink(url: string) {
+    setUploadError(null);
+    setReading(true);
+    try {
+      const res = await fetch("/api/google-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, part: "file" }),
+      });
+      if (res.status === 401) reportSessionExpired();
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new ImportFileError(json.message ?? "Couldn't read the sheet. Try again in a minute.");
+      }
+      const name = decodeURIComponent(res.headers.get("X-File-Name") ?? "Google%20Sheet.xlsx");
+      await onFile(new File([await res.blob()], name, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    } catch (error) {
+      setUploadError(
+        error instanceof ImportFileError ? error.message : error instanceof TypeError ? "Couldn't reach the server. Check your connection." : "Couldn't read the sheet.",
+      );
+      setReading(false);
+    }
+  }
 
   async function onFile(f: File) {
     setUploadError(null);
@@ -273,7 +298,7 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
               {step !== "sheet" && multi ? ` · ${chosen.length} sheets · ${chosenRows.toLocaleString("en-IN")} data rows` : ""}
             </p>
           ) : (
-            <p className="text-sm text-fg-muted">Excel (.xlsx) or CSV, up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows per sheet.</p>
+            <p className="text-sm text-fg-muted">Excel (.xlsx), CSV or a Google Sheet link, up to {MAX_IMPORT_ROWS.toLocaleString("en-IN")} rows per sheet.</p>
           )}
         </div>
       </div>
@@ -302,7 +327,7 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
       </ol>
 
       {step === "upload" ? (
-        <UploadStep reading={reading} error={uploadError} onFile={onFile} />
+        <UploadStep reading={reading} error={uploadError} onFile={onFile} onSheetLink={onSheetLink} />
       ) : null}
 
       {step === "sheet" && parsed ? (
@@ -540,8 +565,19 @@ function StepNav({
   );
 }
 
-function UploadStep({ reading, error, onFile }: { reading: boolean; error: string | null; onFile: (f: File) => void }) {
+function UploadStep({
+  reading,
+  error,
+  onFile,
+  onSheetLink,
+}: {
+  reading: boolean;
+  error: string | null;
+  onFile: (f: File) => void;
+  onSheetLink: (url: string) => void;
+}) {
   const [dragging, setDragging] = useState(false);
+  const [link, setLink] = useState("");
   const input = useRef<HTMLInputElement>(null);
   return (
     <div className="flex flex-col gap-4">
@@ -570,7 +606,7 @@ function UploadStep({ reading, error, onFile }: { reading: boolean; error: strin
         {reading ? (
           <>
             <Spinner className="mb-3 size-6" />
-            <p className="font-medium">Reading file…</p>
+            <p className="font-medium">{link.trim() ? "Fetching every tab of the sheet…" : "Reading file…"}</p>
           </>
         ) : (
           <>
@@ -594,6 +630,45 @@ function UploadStep({ reading, error, onFile }: { reading: boolean; error: strin
           }}
         />
       </label>
+      <Card className="p-4 text-sm">
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (link.trim()) onSheetLink(link.trim());
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-subtle">
+              <Sheet className="size-4" />
+            </span>
+            <div>
+              <p className="font-medium">Or import from a Google Sheet link</p>
+              <p className="text-fg-muted">
+                Every tab is fetched — tick the ones to import next. The sheet must be shared as “Anyone with the link”. To import new rows
+                automatically, use{" "}
+                <Link href="/imports/sheet-sync" className="font-medium text-fg underline underline-offset-2">
+                  Google Sheet sync
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              aria-label="Google Sheets link"
+              inputMode="url"
+              placeholder="https://docs.google.com/spreadsheets/d/…"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              disabled={reading}
+            />
+            <Button type="submit" variant="secondary" className="shrink-0" loading={reading && Boolean(link.trim())} disabled={!link.trim() || reading}>
+              Fetch sheet
+            </Button>
+          </div>
+        </form>
+      </Card>
       <Card className="p-4 text-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

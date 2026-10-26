@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/field";
 import { formatCalendarDate, formatPhone, todayIST } from "@/lib/domain/format";
 import { guestRangeLabel, humanizeCode, platformLabel, reviewFlagLabel } from "@/lib/domain/labels";
-import { describeDayMonth, type YearChoice } from "@/lib/import/dates";
+import { describeDayMonth, eventTiming, type YearChoice } from "@/lib/import/dates";
 import type { NormalizedRow } from "@/lib/import/normalize";
 import { cn } from "@/lib/utils";
 
@@ -176,7 +176,15 @@ export function ReviewStep({
                     ) : null}
                   </td>
                   <td className="px-3 py-2">
-                    {r.lead.event_date ? formatCalendarDate(r.lead.event_date) : r.lead.event_date_raw ? <span className="text-tint-amber-fg">Needs review</span> : "—"}
+                    {r.lead.event_date ? (
+                      formatCalendarDate(r.lead.event_date)
+                    ) : eventTiming(r.lead.event_date_raw) ? (
+                      eventTiming(r.lead.event_date_raw)
+                    ) : r.lead.event_date_raw ? (
+                      <span className="text-tint-amber-fg">Needs review</span>
+                    ) : (
+                      "—"
+                    )}
                     {r.lead.event_date_raw && r.lead.event_date_raw !== r.lead.event_date ? (
                       <span className="block text-[11px] text-fg-subtle">“{r.lead.event_date_raw}”</span>
                     ) : null}

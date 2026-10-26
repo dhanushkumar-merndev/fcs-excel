@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/field";
 import { formatCalendarDate, formatDateTime, formatPhone } from "@/lib/domain/format";
 import { guestRangeLabel, humanizeCode, platformLabel } from "@/lib/domain/labels";
 import { cellText, type RawRow } from "@/lib/import/cells";
+import { eventTiming } from "@/lib/import/dates";
 import { normalizeRow, type NormalizedLead } from "@/lib/import/normalize";
 import type { ParsedSheet } from "@/lib/import/parse";
 import { autoMapHeaders, REQUIRED_KEYS, TEMPLATE_COLUMNS, type ColumnMapping, type TemplateKey } from "@/lib/import/template";
@@ -27,7 +28,7 @@ function cleanedValue(key: TemplateKey, lead: NormalizedLead): string | null {
     case "guests":
       return lead.guest_range ? guestRangeLabel(lead.guest_range) : null;
     case "event_date":
-      return lead.event_date ? formatCalendarDate(lead.event_date) : lead.event_date_raw ? "Needs a year or review" : null;
+      return lead.event_date ? formatCalendarDate(lead.event_date) : lead.event_date_raw ? (eventTiming(lead.event_date_raw) ?? "Needs a year or review") : null;
     case "created_time":
       return lead.source_created_at ? `${formatDateTime(lead.source_created_at)} IST` : "Unreadable";
     case "lead_status":

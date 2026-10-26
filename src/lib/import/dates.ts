@@ -86,6 +86,19 @@ export function describeDayMonth(day: number, month: number) {
  * calendar dates; "29 October"-style values are returned as yearless for explicit resolution;
  * DD/MM vs MM/DD ambiguity and impossible dates are reported, never silently resolved.
  */
+/**
+ * Lead forms that ask "when is your event?" instead of the date answer with a timeframe
+ * ("within_2_weeks", "more_than_1_month", "not_sure"). That's an answer, not a broken date: it is
+ * kept as written and shown as "Within 2 weeks", without a review flag.
+ */
+const TIMEFRAME = /^(within|in the next|in next|next|after|before|more than|less than|over|under|not sure|not decided|undecided|yet to decide|tbd|later|soon|this (week|month|year))\b/i;
+
+export function eventTiming(raw: string | null | undefined): string | null {
+  const words = (raw ?? "").replace(/_+/g, " ").replace(/\s+/g, " ").replace(/ - /g, "–").trim();
+  if (!words || !TIMEFRAME.test(words) || /\d{1,2}[/.-]\d{1,2}|\d{4}/.test(words)) return null;
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
 export function parseEventDate(cell: RawCell | undefined): EventDateResult {
   const raw = cellText(cell).trim();
   if (!raw) return { kind: "empty", raw: "" };

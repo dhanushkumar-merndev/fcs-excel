@@ -92,9 +92,9 @@ export function sourceKey(row: NormalizedRow) {
   return null;
 }
 
-/** Deterministic batch token: a retried run with the same sheet content gets the same batch back. */
-export function batchToken(contentHash: string, firstRow: number) {
-  const h = sha256(`${contentHash}:${firstRow}`);
+/** Deterministic batch token: a retried run with the same tab content gets the same batch back. */
+export function batchToken(contentHash: string, firstRow: number, gid = "") {
+  const h = sha256(gid ? `${gid}:${contentHash}:${firstRow}` : `${contentHash}:${firstRow}`);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
@@ -106,7 +106,8 @@ export function readSheet(csv: string) {
     if (error instanceof ImportFileError) throw new SheetSyncError(error.message);
     throw error;
   }
-  if (!sheet?.headers.length) throw new SheetSyncError("The sheet is empty: there is no header row.");
+  // An empty tab (or one with only headers so far) has nothing to import yet: not an error.
+  if (!sheet?.headers.length || !sheet.rows.length) return { headers: sheet?.headers ?? [], rows: [] as RawRow[], mapping: {} as ColumnMapping };
   const mapping = autoMapHeaders(sheet.headers, sheet.rows);
   const missing = missingRequired(mapping);
   if (missing.length) {

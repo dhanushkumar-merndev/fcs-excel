@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/domain/format";
-import { isSyncSetUp, SHEET_SYNC_COLUMNS, SYNC_EVERY_MINUTES, syncHealth, type SheetSyncStatus } from "@/lib/domain/sheet-sync";
+import { everyLabel, isSyncSetUp, SHEET_SYNC_COLUMNS, syncHealth, type SheetSyncStatus } from "@/lib/domain/sheet-sync";
 import type { Tint } from "@/lib/domain/stages";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { useSyncedState } from "@/lib/hooks";
@@ -124,7 +124,9 @@ export function SheetSyncStatusChip({ initial, canRun }: { initial: SheetSyncSta
         >
           <p className="font-semibold">Google Sheet sync</p>
           <p className="mt-0.5 text-[13px] text-fg-muted">
-            {status.enabled ? `New rows are imported every ${SYNC_EVERY_MINUTES} minutes.` : "Paused — new rows aren't being imported."}
+            {status.enabled
+              ? `New rows from ${status.all_tabs ? "every tab" : "the chosen tabs"} are imported ${everyLabel(status.interval_minutes)}.`
+              : "Paused — new rows aren't being imported."}
           </p>
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13px]">
             <dt className="text-fg-muted">Last synced</dt>

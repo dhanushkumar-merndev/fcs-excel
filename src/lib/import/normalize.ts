@@ -1,5 +1,5 @@
 import { cellText, EMPTY_CELL, isBlankCell, type RawCell, type RawRow } from "./cells";
-import { parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless, type YearChoice } from "./dates";
+import { eventTiming, parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless, type YearChoice } from "./dates";
 import { normalizeId } from "./ids";
 import { normalizePhone } from "./phone";
 import { TEMPLATE_COLUMNS, type ColumnMapping, type TemplateKey } from "./template";
@@ -234,7 +234,12 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
       });
       break;
     }
-    case "invalid":
+    case "invalid": {
+      const timing = eventTiming(parsedDate.raw);
+      if (timing) {
+        issues.push({ field: "event_date", severity: "info", code: "event_timing", message: `Event timing "${timing}" — not a date, kept as the customer's answer.` });
+        break;
+      }
       eventStatus = "needs_review";
       flags.add("date_needs_review");
       issues.push({
@@ -244,21 +249,22 @@ export function normalizeRow(row: RawRow, mapping: ColumnMapping, yearChoice: Ye
         message: `"${parsedDate.raw}": ${parsedDate.reason} Imported without an event date.`,
       });
       break;
+    }
   }
 
   const occasion = toCode(get("occasion"));
   const menu = toCode(get("menu"));
   const guests = text(get("guests"));
   const address = text(get("event_address"));
+  // Only what the form asks is expected: other forms (franchise, webinar…) map none of these
+  // columns, and a form without a menu question isn't flagged for every row lacking a menu.
   const missing = [
-    !parsedDate.raw && "event date",
-    !occasion && "occasion",
-    !guests && "guest range",
-    !menu && "menu",
-    !address && "address",
+    mapping.event_date && !parsedDate.raw && "event date",
+    mapping.occasion && !occasion && "occasion",
+    mapping.guests && !guests && "guest range",
+    mapping.menu && !menu && "menu",
+    mapping.event_address && !address && "address",
   ].filter(Boolean) as string[];
-  // Only event-enquiry forms are expected to have event details; other forms (franchise,
-  // webinar…) map none of these columns and aren't flagged for lacking them.
   const eventForm = EVENT_KEYS.some((k) => mapping[k]);
   if (eventForm && missing.length) {
     flags.add("event_details_missing");

@@ -44,10 +44,30 @@ function serviceClient(): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
+const csvOf = (rows: string[][]) => [HEADERS, ...rows].map((r) => r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\n");
 const csv = () => [HEADERS, ...sheet].map((r) => r.map((c) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(",")).join("\n");
 
-const sync = (overrides: Partial<Parameters<typeof runSheetSync>[1]> = {}) =>
-  runSheetSync(serviceClient(), { secret: SECRET, manual: false, deadline: Date.now() + 30_000, fetchCsv: async () => csv(), ...overrides });
+/** The sheet's tabs as Google lists them; tab "1" is `sheet`, any other tab is in `otherTabs`. */
+let tabList: { gid: string; name: string }[];
+let otherTabs: Record<string, string>;
+
+const sync = async (overrides: Partial<Parameters<typeof runSheetSync>[1]> = {}) => {
+  await due();
+  return runSync(overrides);
+};
+
+const runSync = (overrides: Partial<Parameters<typeof runSheetSync>[1]> = {}) =>
+  runSheetSync(serviceClient(), {
+    secret: SECRET,
+    manual: false,
+    deadline: Date.now() + 30_000,
+    fetchCsv: async (_id, gid) => (gid === "1" ? csv() : (otherTabs[gid!] ?? "")),
+    listTabs: async () => tabList,
+    ...overrides,
+  });
+
+/** Lets the next scheduled run through (runs wait for the chosen interval). */
+const due = () => db.exec(`update public.sheet_sync set last_started_at = now() - interval '1 hour'`);
 
 const one = async <T>(sql: string, params: unknown[] = []) => (await db.query<T>(sql, params)).rows[0];
 const count = async (sql: string) => Number((await one<{ n: number }>(sql)).n);
@@ -61,10 +81,12 @@ beforeEach(async () => {
   await createStaff(db, ADMIN, "admin", "Gayathri");
   await createStaff(db, SALES, "salesperson", "Ravi");
   await db.query(
-    `update public.sheet_sync set enabled = true, sheet_id = 'sheet', sheet_gid = '1', actor_id = $1,
+    `update public.sheet_sync set enabled = true, sheet_id = 'sheet', actor_id = $1,
        cron_secret_sha256 = encode(sha256(convert_to($2, 'UTF8')), 'hex')`,
     [ADMIN, SECRET],
   );
+  tabList = [{ gid: "1", name: "Leads" }];
+  otherTabs = {};
   sheet = [lead("1001", "Asha", "+919845738576"), lead("1002", "Manju", "+919886829199"), lead("1003", "No phone", "")];
 });
 
@@ -93,14 +115,18 @@ describe("sheet sync", () => {
     expect(await count(`select count(*) n from public.notifications`)).toBe(0);
 
     const state = await one<Record<string, unknown>>(
-      `select last_status, last_created, last_invalid, processed_through_row, running_since, run_token, last_synced_at is not null as synced from public.sheet_sync`,
+      `select last_status, last_created, last_invalid, running_since, run_token, last_synced_at is not null as synced from public.sheet_sync`,
     );
-    expect(state).toEqual({ last_status: "ok", last_created: 2, last_invalid: 1, processed_through_row: 4, running_since: null, run_token: null, synced: true });
+    expect(state).toEqual({ last_status: "ok", last_created: 2, last_invalid: 1, running_since: null, run_token: null, synced: true });
+    const tab = await one<Record<string, unknown>>(`select name, last_status, last_created, processed_through_row, enabled from public.sheet_sync_tabs`);
+    expect(tab).toEqual({ name: "Leads", last_status: "ok", last_created: 2, processed_through_row: 4, enabled: true });
+    const sheetName = await one<{ sheet_name: string }>(`select sheet_name from public.import_batches`);
+    expect(sheetName.sheet_name).toBe("Leads");
   });
 
   it("does nothing for an unchanged sheet, and only imports appended rows", async () => {
     await sync();
-    expect(await sync()).toEqual({ status: "unchanged" });
+    expect(await sync()).toMatchObject({ status: "unchanged" });
     expect(await count(`select count(*) n from public.import_batches`)).toBe(1);
 
     sheet.push(lead("1004", "Divya", "+919900112233"));
@@ -139,7 +165,7 @@ describe("sheet sync", () => {
     sheet[0][7] = "Asha K"; // a cosmetic edit to an imported row changes nothing in the CRM
     expect(await sync()).toMatchObject({ status: "ok", created: 1, summary: { rescanned: true, alreadyInCrm: 2 } });
     expect(await count(`select count(*) n from public.leads`)).toBe(3);
-    expect(await sync()).toEqual({ status: "unchanged" });
+    expect(await sync()).toMatchObject({ status: "unchanged" });
   });
 
   it("allows one run at a time", async () => {
@@ -155,7 +181,7 @@ describe("sheet sync", () => {
 
   it("records failures without touching data, and tells admins once after 3 in a row", async () => {
     const failing = { fetchCsv: async () => Promise.reject(new SheetSyncError("Google wouldn't let the CRM read the sheet.")) };
-    for (let i = 0; i < 4; i++) expect(await sync(failing)).toEqual({ status: "error", message: "Google wouldn't let the CRM read the sheet." });
+    for (let i = 0; i < 4; i++) expect(await sync(failing)).toMatchObject({ status: "error", message: "Google wouldn't let the CRM read the sheet." });
     const state = await one<Record<string, unknown>>(`select last_status, consecutive_failures, running_since from public.sheet_sync`);
     expect(state).toEqual({ last_status: "error", consecutive_failures: 4, running_since: null });
     expect(await count(`select count(*) n from public.notifications where recipient_id = '${ADMIN}' and type = 'system'`)).toBe(1);
@@ -167,7 +193,7 @@ describe("sheet sync", () => {
 
   it("rejects a sheet without the required columns", async () => {
     const result = await sync({ fetchCsv: async () => "id,name\nl:1,Asha" });
-    expect(result).toEqual({ status: "error", message: "The sheet has no phone column, so nothing was imported. Check its header row." });
+    expect(result).toMatchObject({ status: "error", message: "The sheet has no phone column, so nothing was imported. Check its header row." });
   });
 
   it("lets staff read the status but not the configuration, and keeps the sync RPCs server-only", async () => {
@@ -176,5 +202,97 @@ describe("sheet sync", () => {
     await expect(asUser(db, ADMIN, (tx) => tx.query(`select sheet_id from public.sheet_sync`))).rejects.toThrow(/permission denied/);
     await expect(asUser(db, ADMIN, (tx) => tx.query(`select public.sheet_sync_claim(null, true)`))).rejects.toThrow(/permission denied/);
     await expect(asUser(db, ADMIN, (tx) => tx.query(`update public.sheet_sync set enabled = false`))).rejects.toThrow(/permission denied/);
+  });
+
+  it("reads every tab, picks up tabs added later, and records each tab", async () => {
+    tabList = [{ gid: "1", name: "Leads" }, { gid: "2", name: "CATERING LEADS" }];
+    otherTabs["2"] = csvOf([lead("5001", "Kavya", "+919900000001")]);
+    const first = await sync();
+    expect(first).toMatchObject({ status: "ok", created: 3 });
+    expect(first.status === "ok" && first.tabs.map((t) => [t.name, t.status, t.created])).toEqual(
+      expect.arrayContaining([
+        ["Leads", "ok", 2],
+        ["CATERING LEADS", "ok", 1],
+      ]),
+    );
+    const names = (await db.query<{ sheet_name: string }>(`select sheet_name from public.import_batches order by sheet_name`)).rows.map((r) => r.sheet_name);
+    expect(names).toEqual(["CATERING LEADS", "Leads"]);
+
+    // A new tab: its own new lead is imported; a lead already imported from another tab is not.
+    tabList.push({ gid: "3", name: "LAND SALES" });
+    otherTabs["3"] = csvOf([lead("1001", "Asha", "+919845738576"), lead("6001", "Ravi K", "+919900000002", "2027-01-10")]);
+    expect(await sync()).toMatchObject({ status: "ok", created: 1 });
+    expect(await count(`select count(*) n from public.leads`)).toBe(4);
+
+    // Renamed and deleted tabs.
+    tabList = [{ gid: "1", name: "Leads (old)" }, { gid: "3", name: "LAND SALES" }];
+    expect(await sync()).toMatchObject({ status: "unchanged" });
+    const tabs = (await db.query(`select gid, name, removed from public.sheet_sync_tabs order by gid`)).rows;
+    expect(tabs).toEqual([
+      { gid: "1", name: "Leads (old)", removed: false },
+      { gid: "2", name: "CATERING LEADS", removed: true },
+      { gid: "3", name: "LAND SALES", removed: false },
+    ]);
+  });
+
+  it("keeps going when one tab can't be used, and treats an empty tab as nothing to do", async () => {
+    tabList = [{ gid: "1", name: "Leads" }, { gid: "2", name: "Notes" }, { gid: "3", name: "Empty" }];
+    otherTabs["2"] = "id,name\nl:9,Somebody";
+    otherTabs["3"] = "";
+    const result = await sync();
+    expect(result).toMatchObject({ status: "ok", created: 2 });
+    const tabs = (await db.query(`select name, last_status, last_error from public.sheet_sync_tabs order by gid`)).rows;
+    expect(tabs).toEqual([
+      { name: "Leads", last_status: "ok", last_error: null },
+      { name: "Notes", last_status: "error", last_error: "The sheet has no phone column, so nothing was imported. Check its header row." },
+      { name: "Empty", last_status: "ok", last_error: null },
+    ]);
+    expect(await one(`select last_status, consecutive_failures from public.sheet_sync`)).toEqual({ last_status: "ok", consecutive_failures: 0 });
+  });
+
+  it("waits for the chosen interval between scheduled runs; Sync now doesn't wait", async () => {
+    await sync();
+    expect(await runSync()).toEqual({ status: "skipped", reason: "not_due" });
+    expect(await runSync({ secret: null, manual: true })).toMatchObject({ status: "unchanged" });
+    await db.exec(`update public.sheet_sync set interval_minutes = 5, last_started_at = now() - interval '4 minutes 30 seconds'`);
+    expect(await runSync()).toMatchObject({ status: "unchanged" });
+  });
+
+  it("is set up from the app by an admin or manager: sheet, ticked tabs and interval", async () => {
+    const SHEET = "1uE52SYaoXvhcoYIpg6kznf5WvoS9p5EVBr2WT9xTYkA";
+    const configure = (user: string, allTabs: boolean, tabs: { gid: string; name: string; enabled: boolean }[], interval = 15) =>
+      asUser(db, user, async (tx) =>
+        (
+          await tx.query<{ r: { tabs: { gid: string; enabled: boolean }[]; interval_minutes: number; actor_name: string } }>(
+            `select public.sheet_sync_configure($1, $2, $3, $4, true) r`,
+            [SHEET, allTabs, JSON.stringify(tabs), interval],
+          )
+        ).rows[0].r,
+      );
+
+    await expect(configure(SALES, true, [{ gid: "1", name: "Leads", enabled: true }])).rejects.toThrow(/Only an admin or manager/);
+    const saved = await configure(ADMIN, false, [
+      { gid: "1", name: "Leads", enabled: true },
+      { gid: "2", name: "Webinar", enabled: false },
+    ]);
+    expect(saved).toMatchObject({ interval_minutes: 15, actor_name: "Gayathri" });
+    expect(saved.tabs.map((t) => [t.gid, t.enabled])).toEqual([
+      ["1", true],
+      ["2", false],
+    ]);
+    await expect(configure(ADMIN, false, [{ gid: "1", name: "Leads", enabled: false }])).rejects.toThrow(/Tick at least one tab/);
+
+    // Unticked tabs aren't read; a tab added later stays off while "all tabs" is off.
+    tabList = [{ gid: "1", name: "Leads" }, { gid: "2", name: "Webinar" }, { gid: "3", name: "New tab" }];
+    const read: string[] = [];
+    await sync({ fetchCsv: async (_id, gid) => (read.push(gid!), gid === "1" ? csv() : "") });
+    expect(read).toEqual(["1"]);
+    expect(await one(`select enabled from public.sheet_sync_tabs where gid = '3'`)).toEqual({ enabled: false });
+
+    // Staff can see each tab's status, never the sheet link.
+    const visible = await asUser(db, SALES, async (tx) => (await tx.query(`select name, last_status from public.sheet_sync_tabs order by gid`)).rows);
+    expect(visible).toHaveLength(3);
+    await expect(asUser(db, SALES, (tx) => tx.query(`select public.sheet_sync_settings()`))).rejects.toThrow(/Only an admin or manager/);
+    await expect(asUser(db, ADMIN, (tx) => tx.query(`select content_hash from public.sheet_sync_tabs`))).rejects.toThrow(/permission denied/);
   });
 });

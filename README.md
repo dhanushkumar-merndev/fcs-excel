@@ -59,26 +59,31 @@ Never deploy `ACCESS_TOKEN`. It is an account-level token used only by the scrip
 
 ## Google Sheet sync
 
-New rows in the Meta leads Google Sheet are imported every 10 minutes, through the same cleaning and duplicate checks as a manual import. The top bar shows **Synced 3 min ago** to everyone, and admins and managers can also press **Sync now**. Each sync that finds new rows appears under **Imports** as "Google Sheet sync", with a report for every row.
+New rows in the Meta leads Google Sheet are imported automatically, from **every tab** (or only the ticked ones), through the same cleaning and duplicate checks as a manual import. Admins and managers set it up under **Imports → Google Sheet sync**: paste the link, load the tabs, choose how often (5, 10, 15, 30 or 60 minutes), and save. The top bar shows **Synced 3 min ago** to everyone, and each run that finds new rows appears under **Imports**, named after its tab.
 
-- **Access.** The sheet is shared as *Anyone with the link → Viewer*. The CRM downloads its CSV export and can never change the sheet. Anyone who has the link can read the sheet, so don't post it anywhere.
-- **Schedule.** Supabase `pg_cron` + `pg_net` call `POST /api/sync/sheet` with a secret. Both are free. Vercel Cron isn't used because the Hobby plan only runs it daily. The secret is kept in Supabase Vault, and only its hash is stored in `public.sheet_sync`. No env vars are needed.
+A sheet can also be imported once, by hand: **New import → Or import from a Google Sheet link** fetches every tab and continues like an uploaded file.
+
+- **Access.** The sheet is shared as *Anyone with the link → Viewer*. The CRM reads the tab list from the sheet's HTML view and each tab's CSV export, and can never change the sheet. Anyone who has the link can read the sheet, so don't post it anywhere.
+- **Tabs.** With "every tab" on, tabs added to the sheet later are picked up on the next run and renamed tabs keep their progress. Each tab keeps its own progress and status; a tab with no phone column is reported on that tab and the others carry on.
+- **Schedule.** Supabase `pg_cron` + `pg_net` check every 5 minutes and call `POST /api/sync/sheet` with a secret only when the chosen interval has passed. Both are free. Vercel Cron isn't used because the Hobby plan only runs it daily. The secret is kept in Supabase Vault, and only its hash is stored in `public.sheet_sync`. No env vars are needed.
 - **Efficiency.**
-  - An unchanged sheet costs one download and one row update.
+  - An unchanged tab costs one download and one row update.
   - Normally only rows added since the last run are read.
   - If someone edits rows that were already synced, those rows are rechecked with index lookups.
-  - Each run handles at most 2,000 new rows, and a backlog continues on the next run.
+  - Each tab handles at most 2,000 new rows per run, and a backlog continues on the next run.
 - **Duplicates.**
-  - A lead already in the CRM, including one imported from a file, is skipped.
+  - A lead already in the CRM, including one imported from a file or another tab, is skipped.
   - A possible duplicate (same phone and same event) is skipped and listed in the import report.
   - A repeat customer (same phone, different event) is imported.
 - **Failures.** A failed run changes no data, and the chip turns red. After 3 failed runs in a row, admins get a notification.
 
+The schedule is installed once per database:
+
 ```bash
 pnpm db:migrate --target live
-pnpm sync:setup --target live --sheet "<sheet link with #gid=…>" --actor <admin username>   # saved, disabled
-pnpm sync:sheet --target live                  # dry run: counts only, changes nothing
-pnpm sync:setup --target live --enable         # start syncing (--disable pauses)
+pnpm sync:setup --target live --sheet "<sheet link>" --actor <admin username>   # installs the schedule (disabled)
+pnpm sync:sheet --target live                  # dry run per tab: counts only, changes nothing
+pnpm sync:setup --target live --enable         # or turn it on in the app
 ```
 
 ## How it works

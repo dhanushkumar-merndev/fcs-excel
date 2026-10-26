@@ -11,13 +11,14 @@ const BUDGET_MS = 45_000;
 const SKIPPED: Record<string, { status: number; message: string }> = {
   unauthorized: { status: 401, message: "Unauthorized." },
   disabled: { status: 409, message: "Google Sheet sync is turned off." },
-  not_configured: { status: 409, message: "Google Sheet sync isn't set up yet (pnpm sync:setup)." },
+  not_configured: { status: 409, message: "Google Sheet sync isn't set up yet. Add the sheet under Imports → Google Sheet sync." },
   busy: { status: 202, message: "A sync is already running." },
+  not_due: { status: 202, message: "Not due yet." },
 };
 
 /**
- * Runs one Google Sheet sync. Called every 10 minutes by pg_cron with a Bearer secret (checked in
- * the database against its stored hash), or by an admin or manager pressing "Sync now".
+ * Runs one Google Sheet sync. Called by pg_cron at the chosen interval with a Bearer secret (checked
+ * in the database against its stored hash), or by an admin or manager pressing "Sync now".
  */
 export async function POST(request: NextRequest) {
   const started = Date.now();

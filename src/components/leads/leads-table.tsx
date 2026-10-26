@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/field";
 import { Menu, MenuContent, MenuLabel, MenuTrigger } from "@/components/ui/menu";
 import { formatCalendarDate, formatDate, formatPhone, timeAgo } from "@/lib/domain/format";
+import { eventTiming } from "@/lib/import/dates";
 import { guestRangeLabel, humanizeCode, platformLabel } from "@/lib/domain/labels";
 import type { LeadWithOwner } from "@/lib/domain/types";
 import { useLocalStorageState } from "@/lib/hooks";
@@ -46,6 +47,8 @@ function cell(lead: LeadWithOwner, key: ColumnKey) {
         <span className="text-tint-amber-fg" title={lead.event_date_raw ?? undefined}>
           Needs review{lead.event_date_raw ? ` · “${lead.event_date_raw}”` : ""}
         </span>
+      ) : eventTiming(lead.event_date_raw) ? (
+        <span className="text-fg-muted">{eventTiming(lead.event_date_raw)}</span>
       ) : (
         <span className="text-fg-subtle">—</span>
       );

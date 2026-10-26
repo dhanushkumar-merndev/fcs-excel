@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawCell, RawRow } from "@/lib/import/cells";
-import { parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless } from "@/lib/import/dates";
+import { eventTiming, parseCreatedTime, parseEventDate, resolveAmbiguous, resolveYearless } from "@/lib/import/dates";
 import { reviewDuplicates, type ExistingLead } from "@/lib/import/duplicates";
 import { normalizeId } from "@/lib/import/ids";
 import { normalizeRow, parseBoolean } from "@/lib/import/normalize";
@@ -107,6 +107,8 @@ describe("labels and booleans", () => {
     expect(humanizeCode("veg_menu")).toBe("Veg Menu");
     expect(guestRangeLabel("1_-_10")).toBe("1–10");
     expect(guestRangeLabel("more_than_30")).toBe("More than 30");
+    expect(guestRangeLabel("1_-_25_members")).toBe("1–25");
+    expect(guestRangeLabel("more_than_500")).toBe("More than 500");
     expect(guestRangeLabel("11-20")).toBe("11–20");
   });
   it("parses the string false as false", () => {
@@ -175,6 +177,33 @@ describe("row normalization", () => {
     });
     expect(row.lead.review_flags).toContain("date_needs_review");
     expect(row.original.phone).toBe("p:+919991999189");
+  });
+
+  it("reads the catering form's event questions; a timeframe answer is kept, not flagged", () => {
+    const headers = ["id", "created_time", "what_type_of_event_are_you_planning?", "when_is_your_event_scheduled?", "approximately_how_many_guests_do_you_expect?", "full_name", "phone_number"];
+    const cells: Record<string, RawCell> = {
+      id: s("l:1650568315988"),
+      created_time: s("2026-10-24T07:10:00+05:30"),
+      "what_type_of_event_are_you_planning?": s("family_get-together"),
+      "when_is_your_event_scheduled?": s("within_2_weeks"),
+      "approximately_how_many_guests_do_you_expect?": s("1_-_25_members"),
+      full_name: s("Santhosh"),
+      phone_number: s("p:+919845738576"),
+    };
+    const formMapping = autoMapHeaders(headers);
+    expect(formMapping).toMatchObject({
+      occasion: "what_type_of_event_are_you_planning?",
+      event_date: "when_is_your_event_scheduled?",
+      guests: "approximately_how_many_guests_do_you_expect?",
+      phone: "phone_number",
+    });
+    const r = normalizeRow({ rowNumber: 2, cells }, formMapping, { mode: "after_created" });
+    expect(r.lead).toMatchObject({ event_date: null, event_date_raw: "within_2_weeks", event_date_status: "missing", guest_range: "1_-_25_members" });
+    expect(r.lead.review_flags).toEqual([]);
+    expect(r.issues.find((i) => i.code === "event_timing")?.message).toMatch(/Within 2 weeks/);
+    expect(eventTiming("more_than_1_month")).toBe("More than 1 month");
+    expect(eventTiming("12/10/2026")).toBeNull();
+    expect(eventTiming("31 nov")).toBeNull();
   });
 
   it("applies an explicit year choice", () => {

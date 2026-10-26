@@ -23,6 +23,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InlineAlert } from "@/components/ui/states";
 import { formatCalendarDate, formatDue, formatINR, formatPhone, timeAgo } from "@/lib/domain/format";
+import { eventTiming } from "@/lib/import/dates";
 import { guestRangeLabel, humanizeCode, reviewFlagLabel } from "@/lib/domain/labels";
 import type { BusinessSettings, Staff, WorkloadRow } from "@/lib/domain/types";
 import type { LeadDetail } from "@/lib/leads/queries";
@@ -209,7 +210,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
                   ) : lead.event_date_status === "needs_review" ? (
                     <span className="text-tint-amber-fg">Needs review{lead.event_date_raw ? ` (“${lead.event_date_raw}”)` : ""}</span>
                   ) : (
-                    "—"
+                    (eventTiming(lead.event_date_raw) ?? "—")
                   )
                 }
               />
