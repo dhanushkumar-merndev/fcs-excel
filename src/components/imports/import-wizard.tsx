@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox, Input } from "@/components/ui/field";
 import { InlineAlert } from "@/components/ui/states";
 import { Spinner } from "@/components/ui/spinner";
+import { ROUND_ROBIN } from "@/lib/domain/assign";
 import type { WorkloadRow } from "@/lib/domain/types";
 import type { YearChoice } from "@/lib/import/dates";
 import type { ExistingLead } from "@/lib/import/duplicates";
@@ -38,7 +39,8 @@ async function loadXlsx() {
   return import("xlsx");
 }
 
-export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
+/** `roundRobin`: the business setting, which makes "Round robin" the default owner choice. */
+export function ImportWizard({ workload, roundRobin }: { workload: WorkloadRow[]; roundRobin: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -50,7 +52,7 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
   const [existing, setExisting] = useState<ExistingLead[] | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Record<number, Decision>>({});
-  const [ownerId, setOwnerId] = useState<string>("");
+  const [ownerId, setOwnerId] = useState<string>(roundRobin ? ROUND_ROBIN : "");
   const [reading, setReading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress>({ phase: "idle" });
@@ -214,7 +216,8 @@ export function ImportWizard({ workload }: { workload: WorkloadRow[] }) {
             mapping: mappings[sheet.name] ?? {},
             yearChoice,
             decisions: decisionsForSheet(decisions, index, chosen.length),
-            defaultOwnerId: ownerId || null,
+            defaultOwnerId: ownerId && ownerId !== ROUND_ROBIN ? ownerId : null,
+            assign: ownerId === ROUND_ROBIN ? "round_robin" : null,
           }),
         );
         const res = await fetch("/api/imports", { method: "POST", body: form });

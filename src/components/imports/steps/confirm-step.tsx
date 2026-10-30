@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
+import { ROUND_ROBIN } from "@/lib/domain/assign";
 import type { WorkloadRow } from "@/lib/domain/types";
 import type { YearChoice } from "@/lib/import/dates";
 import type { PreparedImport, summarizeBySheet } from "@/lib/import/prepare";
@@ -86,6 +87,7 @@ export function ConfirmStep({
       <Card className="p-4 sm:p-5">
         <Field label="Assign new leads to" htmlFor="import-owner" hint="You can also assign later, individually or in bulk.">
           <Select id="import-owner" value={ownerId} onChange={(e) => onOwner(e.target.value)}>
+            <option value={ROUND_ROBIN}>Round robin — salespeople in turn</option>
             <option value="">Leave unassigned (queue)</option>
             {workload
               .filter((w) => w.is_active)

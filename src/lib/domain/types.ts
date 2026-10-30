@@ -1,3 +1,5 @@
+import type { Phase } from "./stages";
+
 export type Role = "admin" | "manager" | "salesperson";
 
 export type Staff = {
@@ -5,6 +7,8 @@ export type Staff = {
   fullName: string;
   username: string;
   role: Role;
+  /** BDE desk (salespeople on the pipeline); null otherwise. */
+  desk: Phase | null;
 };
 
 export type ProfileRow = {
@@ -16,6 +20,7 @@ export type ProfileRow = {
   is_active: boolean;
   invited_at: string;
   deactivated_at: string | null;
+  desk?: Phase | null;
 };
 
 export type LeadRow = {
@@ -39,6 +44,16 @@ export type LeadRow = {
   assigned_at: string | null;
   quoted_amount_inr: string | number | null;
   booking_value_inr: string | number | null;
+  phase: Phase;
+  service_type: ServiceType | null;
+  budget_inr: string | number | null;
+  handover_acknowledged_at: string | null;
+  handover_acknowledged_by: string | null;
+  chef_name: string | null;
+  chef_phone: string | null;
+  chef_assigned_at: string | null;
+  ops_notes: string | null;
+  event_completed_at: string | null;
   source_system: "meta_lead_ads" | "manual";
   external_lead_id: string | null;
   external_lead_id_raw: string | null;
@@ -156,6 +171,9 @@ export type BusinessSettings = {
   default_phone_country: string;
   reminder_lead_minutes: number;
   salesperson_export_enabled: boolean;
+  round_robin_enabled: boolean;
+  pipeline_enabled: boolean;
+  first_call_sla_minutes: number;
   lost_reasons: string[];
   unqualified_reasons: string[];
   updated_at: string;
@@ -170,4 +188,43 @@ export type WorkloadRow = {
   overdue_follow_ups: number;
   due_today: number;
   assigned_last_7_days: number;
+};
+
+export type ServiceType = "chef_on_demand" | "catering";
+
+export type LeadPaymentRow = {
+  id: string;
+  lead_id: string;
+  kind: "advance" | "balance" | "refund";
+  amount_inr: string | number;
+  paid_on: string;
+  mode: "upi" | "cash" | "bank_transfer" | "card" | "other" | null;
+  reference: string | null;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+};
+
+export type LeadHandoffRow = {
+  id: string;
+  lead_id: string;
+  from_phase: Phase;
+  to_phase: Phase;
+  from_owner_id: string | null;
+  to_owner_id: string | null;
+  by_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export type SalesTargetRow = {
+  month: string;
+  leads_per_day: number;
+  working_days: number;
+  push_rate: string | number;
+  qualification_rate: string | number;
+  closing_rate: string | number;
+  chef_ticket_inr: string | number;
+  catering_ticket_inr: string | number;
+  chef_mix_pct: string | number;
 };

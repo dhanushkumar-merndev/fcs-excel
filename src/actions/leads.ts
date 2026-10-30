@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { fromDbError, invalid, ok, type ActionResult } from "@/lib/action-result";
+import { ROUND_ROBIN } from "@/lib/domain/assign";
 import { CALL_OUTCOMES } from "@/lib/domain/labels";
 import { STAGES } from "@/lib/domain/stages";
 import { normalizePhone } from "@/lib/import/phone";
@@ -45,7 +46,7 @@ const createSchema = z.object({
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable().or(z.literal("")),
   eventAddress: optionalText(500),
   priority: z.enum(["low", "normal", "high"]).default("normal"),
-  ownerId: uuid.optional().nullable().or(z.literal("")),
+  ownerId: uuid.optional().nullable().or(z.literal("")).or(z.literal(ROUND_ROBIN)),
   channel: optionalText(40),
   quotedAmount: money,
   note: optionalText(5000),
@@ -72,7 +73,8 @@ export async function createLead(input: z.input<typeof createSchema>): Promise<A
       event_date: v.eventDate || null,
       event_address: v.eventAddress || null,
       priority: v.priority,
-      owner_id: v.ownerId || null,
+      owner_id: v.ownerId && v.ownerId !== ROUND_ROBIN ? v.ownerId : null,
+      assign: v.ownerId === ROUND_ROBIN ? ROUND_ROBIN : null,
       platform: v.channel || null,
       quoted_amount_inr: v.quotedAmount,
       note: v.note || null,
@@ -121,6 +123,8 @@ const detailsSchema = z.object({
       priority: z.enum(["low", "normal", "high"]),
       quoted_amount_inr: money,
       booking_value_inr: money,
+      service_type: z.enum(["chef_on_demand", "catering"]).nullable(),
+      budget_inr: money,
     })
     .partial(),
 });
@@ -191,6 +195,51 @@ export async function assignLeads(input: z.input<typeof assignSchema>): Promise<
   });
 }
 
+export type RoundRobinResult = { updated: number; remaining: number; per_owner: { id: string; name: string; count: number }[] };
+
+const roundRobinSchema = z.object({
+  requestId: uuid,
+  leadIds: z.array(uuid).min(1, "Select at least one lead.").max(1000, "Assign at most 1,000 leads at a time.").optional().nullable(),
+  limit: z.number().int().min(1).max(1000).optional(),
+});
+
+/**
+ * Deals leads out to the salespeople in turn. With leadIds: those leads. Without: open leads that
+ * have no owner, oldest first, `limit` per call — repeat while `remaining` > 0.
+ */
+export async function assignLeadsRoundRobin(input: z.input<typeof roundRobinSchema>): Promise<ActionResult<RoundRobinResult>> {
+  const parsed = roundRobinSchema.safeParse(input);
+  if (!parsed.success) return firstIssue(parsed.error);
+  const v = parsed.data;
+  return call("assign_leads_round_robin", { p_request_id: v.requestId, p_lead_ids: v.leadIds ?? null, p_limit: v.limit ?? 500 });
+}
+
+/** Resolves the leads matching the current filters (on the server, under RLS), at most 1,000. */
+async function matchingLeadIds(filters: Record<string, unknown>, expectedCount: number): Promise<ActionResult<string[]>> {
+  const supabase = await createClient();
+  const { data, error, count } = await supabase
+    .rpc("search_leads", { p_filters: filters ?? {} }, { count: "exact" })
+    .select("id")
+    .limit(1001);
+  if (error) return fromDbError(error);
+  if ((count ?? 0) > 1000) return invalid("More than 1,000 leads match. Narrow the filters and assign in parts.");
+  if (count !== expectedCount) {
+    return { ok: false, code: "conflict", message: `The matching leads changed (now ${count}). Review the list and try again.` };
+  }
+  return ok(((data ?? []) as unknown as { id: string }[]).map((r) => r.id));
+}
+
+/** Deals every lead matching the current filters out round robin. */
+export async function assignMatchingLeadsRoundRobin(input: {
+  requestId: string;
+  filters: Record<string, unknown>;
+  expectedCount: number;
+}): Promise<ActionResult<RoundRobinResult>> {
+  const ids = await matchingLeadIds(input.filters, input.expectedCount);
+  if (!ids.ok) return ids;
+  return assignLeadsRoundRobin({ requestId: input.requestId, leadIds: ids.data });
+}
+
 /** Assign every lead matching the current filters (resolved on the server, under RLS). */
 export async function assignMatchingLeads(input: {
   requestId: string;
@@ -199,19 +248,11 @@ export async function assignMatchingLeads(input: {
   reason?: string | null;
   expectedCount: number;
 }): Promise<ActionResult<{ updated: number; unchanged: number; not_found: number }>> {
-  const supabase = await createClient();
-  const { data, error, count } = await supabase
-    .rpc("search_leads", { p_filters: input.filters ?? {} }, { count: "exact" })
-    .select("id")
-    .limit(1001);
-  if (error) return fromDbError(error);
-  if ((count ?? 0) > 1000) return invalid("More than 1,000 leads match. Narrow the filters and assign in parts.");
-  if (count !== input.expectedCount) {
-    return { ok: false, code: "conflict", message: `The matching leads changed (now ${count}). Review the list and try again.` };
-  }
+  const ids = await matchingLeadIds(input.filters, input.expectedCount);
+  if (!ids.ok) return ids;
   return assignLeads({
     requestId: input.requestId,
-    leadIds: ((data ?? []) as unknown as { id: string }[]).map((r) => r.id),
+    leadIds: ids.data,
     ownerId: input.ownerId,
     reason: input.reason,
   });

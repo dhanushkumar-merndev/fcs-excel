@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { InlineAlert } from "@/components/ui/states";
+import { ROUND_ROBIN } from "@/lib/domain/assign";
 import { formatCalendarDate } from "@/lib/domain/format";
 import { MANUAL_CHANNELS } from "@/lib/domain/labels";
 import type { WorkloadRow } from "@/lib/domain/types";
@@ -17,7 +18,7 @@ import { useRunAction } from "./use-run-action";
 
 type Match = { id: string; lead_number: number; customer_name: string; event_date: string | null; stage: string; owner_name: string | null };
 
-export function NewLeadForm({ workload }: { workload: WorkloadRow[] }) {
+export function NewLeadForm({ workload, roundRobin }: { workload: WorkloadRow[]; roundRobin: boolean }) {
   const router = useRouter();
   const run = useRunAction();
   const [requestId] = useRequestId();
@@ -31,7 +32,7 @@ export function NewLeadForm({ workload }: { workload: WorkloadRow[] }) {
     eventDate: "",
     eventAddress: "",
     priority: "normal" as "low" | "normal" | "high",
-    ownerId: "",
+    ownerId: roundRobin ? ROUND_ROBIN : "",
     quotedAmount: "",
     note: "",
   });
@@ -121,8 +122,9 @@ export function NewLeadForm({ workload }: { workload: WorkloadRow[] }) {
               ))}
             </Select>
           </Field>
-          <Field label="Assign to" htmlFor="nl-owner" hint="Leave unassigned to place it in the queue.">
+          <Field label="Assign to" htmlFor="nl-owner" hint="Round robin gives it to the next salesperson in turn. Leave unassigned to place it in the queue.">
             <Select id="nl-owner" value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)}>
+              <option value={ROUND_ROBIN}>Round robin — next salesperson in turn</option>
               <option value="">Unassigned</option>
               {workload
                 .filter((w) => w.is_active)

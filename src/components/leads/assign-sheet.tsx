@@ -1,8 +1,9 @@
 "use client";
 
+import { Repeat } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { assignLeads, assignMatchingLeads } from "@/actions/leads";
+import { assignLeads, assignLeadsRoundRobin, assignMatchingLeads, assignMatchingLeadsRoundRobin } from "@/actions/leads";
 import { Avatar } from "@/components/shell/user-menu";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
@@ -34,7 +35,7 @@ export function AssignSheet({
 }) {
   const run = useRunAction();
   const [requestId, rotate] = useRequestId();
-  const [owner, setOwner] = useState<string | "unassigned" | "">("");
+  const [owner, setOwner] = useState<string | "unassigned" | "round_robin" | "">("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,27 @@ export function AssignSheet({
     if (!owner) return setError("Choose who should own the lead.");
     setSaving(true);
     setError(null);
+    if (owner === "round_robin") {
+      const result = await run(
+        () =>
+          scope.kind === "ids"
+            ? assignLeadsRoundRobin({ requestId, leadIds: scope.ids })
+            : assignMatchingLeadsRoundRobin({ requestId, filters: scope.filters, expectedCount: scope.count }),
+        { quietValidation: true },
+      );
+      setSaving(false);
+      if (result.ok) {
+        rotate();
+        toast.success(`${pluralize(result.data.updated, "lead")} dealt out round robin`, {
+          description: result.data.per_owner.map((p) => `${p.name} ${p.count}`).join(" · ") || undefined,
+        });
+        onOpenChange(false);
+        onDone?.();
+      } else if (result.code === "validation" || result.code === "conflict") {
+        setError(result.message);
+      }
+      return;
+    }
     const ownerId = owner === "unassigned" ? null : owner;
     const result = await run(
       () =>
@@ -101,6 +123,26 @@ export function AssignSheet({
       <div className="flex flex-col gap-4">
         {error ? <InlineAlert tone="danger">{error}</InlineAlert> : null}
         <div role="radiogroup" aria-label="New owner" className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={owner === "round_robin"}
+            onClick={() => setOwner("round_robin")}
+            className={cn(
+              "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+              owner === "round_robin" ? "border-fg ring-1 ring-fg" : "border-line hover:bg-hover",
+            )}
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-subtle">
+              <Repeat className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Round robin</span>
+              <span className="block text-xs text-fg-subtle">
+                {count === 1 ? "Goes to the salesperson whose turn is next" : "Shared out to the salespeople in turn, evenly"}
+              </span>
+            </span>
+          </button>
           {people.map((p) => {
             const current = scope.kind === "ids" && scope.currentOwnerId === p.id;
             return (
@@ -143,9 +185,11 @@ export function AssignSheet({
             Move to unassigned queue
           </button>
         </div>
-        <Field label="Note for the history (optional)" htmlFor="assign-reason">
-          <Input id="assign-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Covering while Anil is on leave" maxLength={300} />
-        </Field>
+        {owner !== "round_robin" ? (
+          <Field label="Note for the history (optional)" htmlFor="assign-reason">
+            <Input id="assign-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Covering while Anil is on leave" maxLength={300} />
+          </Field>
+        ) : null}
       </div>
     </Sheet>
   );

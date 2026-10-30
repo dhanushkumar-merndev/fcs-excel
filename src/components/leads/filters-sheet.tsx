@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox, Input } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { formatCalendarDate } from "@/lib/domain/format";
-import { callOutcomeLabel, humanizeCode, platformLabel } from "@/lib/domain/labels";
-import { STAGES, stageLabel } from "@/lib/domain/stages";
+import { SERVICE_TYPES, callOutcomeLabel, humanizeCode, platformLabel, serviceTypeLabel } from "@/lib/domain/labels";
+import { PHASES, STAGES, phaseLabel, stageLabel } from "@/lib/domain/stages";
 import type { WorkloadRow } from "@/lib/domain/types";
 import { filtersToParams, VIEWS, type LeadFilters, type ViewKey } from "@/lib/leads/filters";
 import type { FilterOptions } from "@/lib/leads/queries";
@@ -184,6 +184,24 @@ export function FiltersSheet({
             ))}
           </div>
         </Section>
+        <Section title="BDE desk">
+          <div className="flex flex-wrap gap-2">
+            {PHASES.map((p) => (
+              <Chip key={p.value} active={draft.phase?.includes(p.value) ?? false} onClick={() => set({ phase: toggle(draft.phase, p.value) })}>
+                {p.label}
+              </Chip>
+            ))}
+          </div>
+        </Section>
+        <Section title="Service">
+          <div className="flex flex-wrap gap-2">
+            {SERVICE_TYPES.map((t) => (
+              <Chip key={t.value} active={draft.service_type?.includes(t.value) ?? false} onClick={() => set({ service_type: toggle(draft.service_type, t.value) })}>
+                {t.label}
+              </Chip>
+            ))}
+          </div>
+        </Section>
         <Section title="Follow-up">
           <div className="flex flex-wrap gap-2">
             {FOLLOW_UP_OPTIONS.map(([value, label]) => (
@@ -241,6 +259,10 @@ export function FiltersSheet({
               <Checkbox checked={draft.no_contact ?? false} onChange={(e) => set({ no_contact: e.target.checked || undefined })} />
               Awaiting first logged call
             </label>
+            <label className="flex min-h-10 items-center gap-3 text-sm">
+              <Checkbox checked={draft.no_next_action ?? false} onChange={(e) => set({ no_next_action: e.target.checked || undefined })} />
+              No next action (open, no follow-up scheduled)
+            </label>
             <div className="mt-2 flex flex-wrap gap-2">
               {(["high", "normal", "low"] as const).map((p) => (
                 <Chip key={p} active={draft.priority?.includes(p) ?? false} onClick={() => set({ priority: toggle(draft.priority, p) })}>
@@ -288,8 +310,11 @@ export function FilterChips({
   if (filters.priority) chips.push({ key: "pr", label: `Priority: ${filters.priority.join(", ")}`, params: ["priority"] });
   if (filters.review) chips.push({ key: "rv", label: "Needs review", params: ["review"] });
   if (filters.no_contact) chips.push({ key: "nc", label: "Awaiting first call", params: ["no_contact"] });
+  if (filters.no_next_action) chips.push({ key: "nna", label: "No next action", params: ["no_next_action"] });
+  if (filters.phase) chips.push({ key: "ph", label: `Desk: ${filters.phase.map(phaseLabel).join(", ")}`, params: ["phase"] });
+  if (filters.service_type) chips.push({ key: "svc", label: `Service: ${filters.service_type.map(serviceTypeLabel).join(", ")}`, params: ["service_type"] });
   if (filters.import_batch) chips.push({ key: "ib", label: "From one import", params: ["import"] });
-  if (filters.phone) chips.push({ key: "ph", label: `Phone ${filters.phone}`, params: ["phone"] });
+  if (filters.phone) chips.push({ key: "phone", label: `Phone ${filters.phone}`, params: ["phone"] });
   if (filters.source) chips.push({ key: "src", label: filters.source === "manual" ? "Added manually" : "Imported from Meta", params: ["source"] });
   if (filters.activity) {
     const a = filters.activity;

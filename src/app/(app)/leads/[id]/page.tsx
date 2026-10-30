@@ -5,7 +5,7 @@ import { LeadDetailView } from "@/components/leads/detail/lead-detail";
 import { LeadDetailSkeleton } from "@/components/leads/detail/skeleton";
 import { getCurrentStaff } from "@/lib/auth/dal";
 import { can } from "@/lib/domain/permissions";
-import { getLeadDetail, getSettings, getWorkload } from "@/lib/leads/queries";
+import { getLeadDetail, getPipeline, getSettings, getWorkload } from "@/lib/leads/queries";
 
 export const metadata: Metadata = { title: "Lead" };
 
@@ -20,12 +20,13 @@ export default function LeadPage(props: PageProps<"/leads/[id]">) {
 async function LeadContent({ params }: { params: PageProps<"/leads/[id]">["params"] }) {
   const [{ id }, staff] = await Promise.all([params, getCurrentStaff()]);
   const manager = can(staff.role, "assign");
-  const [detail, settings, workload] = await Promise.all([
+  const [detail, settings, workload, pipeline] = await Promise.all([
     getLeadDetail(id),
     getSettings(),
     manager ? getWorkload() : Promise.resolve([]),
+    manager ? getPipeline() : Promise.resolve(null),
   ]);
   // Missing and not-permitted look the same, so IDs can't be probed.
   if (!detail) notFound();
-  return <LeadDetailView detail={detail} staff={staff} settings={settings} workload={workload} />;
+  return <LeadDetailView detail={detail} staff={staff} settings={settings} workload={workload} deskMembers={pipeline?.members} />;
 }

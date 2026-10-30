@@ -86,6 +86,26 @@ pnpm sync:sheet --target live                  # dry run per tab: counts only, c
 pnpm sync:setup --target live --enable         # or turn it on in the app
 ```
 
+## BDE pipeline (four desks)
+
+Leads can run through four desks, each staffed by its own salespeople (separate logins):
+
+| Desk | Does | Hands on when | KPI |
+|---|---|---|---|
+| BDE 1 · Lead desk | Calls every new lead | Interested → **push to BDE 2** (needs a connected call and a note) | 100% attended; first call within the target minutes |
+| BDE 2 · Qualification | Works interested leads | Qualified → **push to BDE 3** (needs event type, date, location, guests, service and budget) | 70% qualified |
+| BDE 3 · Closing | Quotes, follows up, collects the advance | **Confirm booking**, refused until an advance is recorded → BDE 4 | 40% of qualified leads booked |
+| BDE 4 · Operations | Acknowledges the handover, assigns the chef, completes the event | — | 100% handed over |
+
+- **Setup.** An admin puts each salesperson on a desk and switches the pipeline on under **Team → BDE pipeline**. It can't be switched on while a desk is empty. Off (the default) means everything works as before; switching it off again changes no data.
+- **Ownership.** Each handoff gives the lead to the next person on that desk in turn, so the owner is always whoever is working it now (salespeople see only their own leads). Pending follow-ups move with it. Managers can move a lead to any desk and choose the person.
+- **Stages.** Each desk can only set its own stages: BDE 1 New / Contact Attempted / Contacted, BDE 2 Interested, BDE 3 Qualified / Quote Sent / Negotiation / Advance Pending. A lead can be marked Lost or Unqualified at any desk, and the desk is recorded. Booked stays Booked through operations; a cancelled booking is marked Lost ("Booking cancelled") with any refund in the ledger.
+- **Payments** are an append-only ledger (advance, balance, refund). Gross booked, advance and balance collected, outstanding, and realized (events completed) are reported separately.
+- **Service** (Chef on Demand / Catering) is filled in from the sheet tab or form name on import and can be edited on the lead.
+- **Targets** (`/targets`, admins and managers): the monthly plan (leads/day, working days, rates, ticket sizes, mix), month to date against target and pace, the 100-point desk scorecard (25 / 25 / 30 / 20), revenue, per-person numbers, loss reasons, and the daily report for any day. Desk staff see their own desk's numbers on their dashboard.
+
+Rollout: run `pnpm db:migrate` on the database **before** deploying the app (the migration is additive and works with the current app), deploy, then assign desks and switch it on.
+
 ## How it works
 
 **Permissions are enforced in Postgres.**

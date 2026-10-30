@@ -26,6 +26,7 @@ const metaSchema = z.object({
   ]),
   decisions: z.record(z.string().regex(/^\d+$/), z.enum(["import", "skip"])).default({}),
   defaultOwnerId: z.string().uuid().nullable(),
+  assign: z.literal("round_robin").nullable().default(null),
 });
 
 /**
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_FILE_BYTES) return jsonError("The file is larger than 10 MB. Remove extra sheets or columns and try again.", 413);
 
   const supabase = await createClient();
-  const { clientToken, sheetName, yearChoice, decisions, defaultOwnerId } = meta.data;
+  const { clientToken, sheetName, yearChoice, decisions, defaultOwnerId, assign } = meta.data;
   const mapping = meta.data.mapping as ColumnMapping;
 
   // Retried request for a batch that is already staged: return it unchanged.
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
       column_mapping: mapping,
       event_year_choice: yearChoice,
       default_owner_id: defaultOwnerId,
+      assign,
       total_rows: plan.rows.length,
     },
   });

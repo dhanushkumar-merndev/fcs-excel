@@ -30,10 +30,15 @@ export type LeadFilters = {
   phone?: string;
   source?: "meta_lead_ads" | "manual";
   ids?: string[];
+  /** BDE desk(s). */
+  phase?: string[];
+  service_type?: string[];
+  /** Open leads with no pending follow-up. */
+  no_next_action?: boolean;
   activity?: { type: "call" | "dial" | "follow_up_completed" | "booked"; outcome?: string; from?: string; to?: string; actor?: string };
 };
 
-const LIST_KEYS = ["owner", "stage", "platform", "campaign", "ad", "occasion", "menu", "priority", "event_status"] as const;
+const LIST_KEYS = ["owner", "stage", "platform", "campaign", "ad", "occasion", "menu", "priority", "event_status", "phase", "service_type"] as const;
 const DATE_KEYS = [
   "event_from", "event_to", "acquired_from", "acquired_to", "imported_from", "imported_to", "closed_from", "closed_to",
 ] as const;
@@ -62,6 +67,7 @@ export const VIEWS = {
   awaiting_contact: { label: "Awaiting first call", managerOnly: false },
   needs_review: { label: "Needs review", managerOnly: false },
   new_this_week: { label: "New this week", managerOnly: false },
+  no_next_action: { label: "No next action", managerOnly: false },
   recently_assigned: { label: "Recently assigned", managerOnly: false },
 } as const;
 export type ViewKey = keyof typeof VIEWS;
@@ -86,6 +92,8 @@ export function viewFilters(view: ViewKey | null, now = new Date()): { filters: 
       return { filters: { no_contact: true }, sort: "imported" };
     case "needs_review":
       return { filters: { review: true, stage_group: "open" } };
+    case "no_next_action":
+      return { filters: { no_next_action: true }, sort: "activity" };
     case "new_this_week":
       return { filters: { imported_from: addDays(today, -6) }, sort: "imported" };
     case "recently_assigned":
@@ -135,6 +143,7 @@ export function parseExplicitFilters(params: Params): LeadFilters {
   if (fu === "overdue" || fu === "today" || fu === "upcoming" || fu === "none" || fu === "due") f.follow_up = fu;
   if (read(params, "review") === "1") f.review = true;
   if (read(params, "no_contact") === "1") f.no_contact = true;
+  if (read(params, "no_next_action") === "1") f.no_next_action = true;
   const batch = read(params, "import");
   if (batch && /^[0-9a-f-]{36}$/i.test(batch)) f.import_batch = batch;
   const phone = read(params, "phone");
@@ -179,6 +188,7 @@ export function filtersToParams(filters: LeadFilters, extra: Record<string, stri
   if (filters.follow_up) p.set("follow_up", filters.follow_up);
   if (filters.review) p.set("review", "1");
   if (filters.no_contact) p.set("no_contact", "1");
+  if (filters.no_next_action) p.set("no_next_action", "1");
   if (filters.import_batch) p.set("import", filters.import_batch);
   if (filters.phone) p.set("phone", filters.phone);
   if (filters.source) p.set("source", filters.source);
@@ -209,6 +219,7 @@ export function activeFilterCount(f: LeadFilters) {
   if (f.follow_up) n++;
   if (f.review) n++;
   if (f.no_contact) n++;
+  if (f.no_next_action) n++;
   if (f.stage_group) n++;
   if (f.import_batch) n++;
   if (f.activity) n++;

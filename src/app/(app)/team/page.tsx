@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { WorkloadTable } from "@/components/dashboard/manager-dashboard";
 import { PageContainer, PageHeader } from "@/components/shell/page";
+import { PipelineCard } from "@/components/team/pipeline-card";
+import { RoundRobinCard } from "@/components/team/round-robin-card";
 import { TeamManager, type Member } from "@/components/team/team-manager";
 import { Card, CardBody, CardHeader, Skeleton } from "@/components/ui/card";
 import { PermissionDenied } from "@/components/ui/states";
 import { getCurrentStaff } from "@/lib/auth/dal";
-import { getTeam, getWorkload } from "@/lib/leads/queries";
+import { getPipeline, getRoundRobin, getTeam, getWorkload } from "@/lib/leads/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Team" };
@@ -24,12 +26,19 @@ export default function TeamPage() {
 async function Content() {
   const staff = await getCurrentStaff();
   if (staff.role === "salesperson") return <PermissionDenied description="Only admins and managers can see the team page." />;
-  const [team, workload] = await Promise.all([getTeam(), getWorkload()]);
+  const [team, workload, roundRobin, pipeline] = await Promise.all([getTeam(), getWorkload(), getRoundRobin(), getPipeline()]);
+  const rotation = (
+    <>
+      <PipelineCard info={pipeline} canEdit={staff.role === "admin"} />
+      <RoundRobinCard {...roundRobin} canEdit={staff.role === "admin"} pipelineOn={pipeline.enabled} />
+    </>
+  );
 
   if (staff.role === "manager") {
     return (
       <>
         <PageHeader title="Team" description="Workload across the team. Only an admin can invite people or change roles." />
+        {rotation}
         <Card>
           <CardHeader title="Workload" />
           <CardBody className="px-2 sm:px-3">
@@ -57,5 +66,9 @@ async function Content() {
       overdue_follow_ups: w?.overdue_follow_ups ?? 0,
     };
   });
-  return <TeamManager members={members} currentUserId={staff.id} />;
+  return (
+    <TeamManager members={members} currentUserId={staff.id}>
+      {rotation}
+    </TeamManager>
+  );
 }

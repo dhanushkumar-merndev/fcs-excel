@@ -112,7 +112,10 @@ describe("sheet sync", () => {
       { external_lead_id: "l:1001", created_by: ADMIN },
       { external_lead_id: "l:1002", created_by: ADMIN },
     ]);
-    expect(await count(`select count(*) n from public.notifications`)).toBe(0);
+    // No "import finished" notice every run; the salesperson who got the leads (round robin) is told once.
+    expect(await count(`select count(*) n from public.notifications where type = 'import_completed'`)).toBe(0);
+    expect(await count(`select count(*) n from public.notifications where type = 'lead_assigned' and recipient_id = '${SALES}'`)).toBe(1);
+    expect(await count(`select count(*) n from public.leads where owner_id = '${SALES}'`)).toBe(2);
 
     const state = await one<Record<string, unknown>>(
       `select last_status, last_created, last_invalid, running_since, run_token, last_synced_at is not null as synced from public.sheet_sync`,

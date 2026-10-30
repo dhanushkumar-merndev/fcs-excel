@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { InlineAlert } from "@/components/ui/states";
-import { humanizeCode } from "@/lib/domain/labels";
+import { SERVICE_TYPES, humanizeCode } from "@/lib/domain/labels";
 import type { LeadRow } from "@/lib/domain/types";
 import { useOnOpen, useRequestId } from "@/lib/hooks";
 import { useRunAction } from "../use-run-action";
@@ -22,6 +22,8 @@ type Form = {
   priority: "low" | "normal" | "high";
   quoted_amount_inr: string;
   booking_value_inr: string;
+  service_type: string;
+  budget_inr: string;
 };
 
 function fromLead(lead: LeadRow): Form {
@@ -36,6 +38,8 @@ function fromLead(lead: LeadRow): Form {
     priority: lead.priority,
     quoted_amount_inr: lead.quoted_amount_inr === null ? "" : String(lead.quoted_amount_inr),
     booking_value_inr: lead.booking_value_inr === null ? "" : String(lead.booking_value_inr),
+    service_type: lead.service_type ?? "",
+    budget_inr: lead.budget_inr === null || lead.budget_inr === undefined ? "" : String(lead.budget_inr),
   };
 }
 
@@ -110,6 +114,19 @@ export function EditDetailsSheet({ lead, open, onOpenChange }: { lead: LeadRow; 
         </Field>
         <Field label="Menu" htmlFor="ed-menu">
           <Input id="ed-menu" value={form.menu_code} onChange={(e) => set("menu_code", e.target.value)} placeholder="e.g. Veg Menu" />
+        </Field>
+        <Field label="Service" htmlFor="ed-service">
+          <Select id="ed-service" value={form.service_type} onChange={(e) => set("service_type", e.target.value)}>
+            <option value="">Not set</option>
+            {SERVICE_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Customer's budget (INR)" htmlFor="ed-budget">
+          <Input id="ed-budget" inputMode="decimal" value={form.budget_inr} onChange={(e) => set("budget_inr", e.target.value.replace(/[^\d.]/g, ""))} />
         </Field>
         <Field label="Guests" htmlFor="ed-guests" hint="Keep as a range, e.g. 11-20.">
           <Input id="ed-guests" value={form.guest_range} onChange={(e) => set("guest_range", e.target.value)} />

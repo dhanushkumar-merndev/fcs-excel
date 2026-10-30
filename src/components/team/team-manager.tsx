@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Ellipsis, KeyRound, MessageCircle, RefreshCw, Trash2, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { addStaff, changeRole, deleteStaff, resetStaffPassword, setActive } from "@/actions/team";
 import { useRunAction } from "@/components/leads/use-run-action";
@@ -38,7 +38,8 @@ function credentialsText(c: Credentials) {
   return `Hi ${c.name}, your login for our CRM:\n${window.location.origin}\nUsername: ${c.username}\nPassword: ${c.password}`;
 }
 
-export function TeamManager({ members, currentUserId }: { members: Member[]; currentUserId: string }) {
+/** `children` renders between the page header and the member list. */
+export function TeamManager({ members, currentUserId, children }: { members: Member[]; currentUserId: string; children?: ReactNode }) {
   const run = useRunAction();
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -138,6 +139,7 @@ export function TeamManager({ members, currentUserId }: { members: Member[]; cur
           </Button>
         }
       />
+      {children}
 
       <ul className="flex flex-col gap-2">
         {[...active, ...inactive].map((m) => (

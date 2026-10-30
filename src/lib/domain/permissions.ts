@@ -30,13 +30,13 @@ export type Capability =
   | "manageTeam"
   | "manageSettings";
 
-export type NavKey = "dashboard" | "leads" | "follow-ups" | "imports" | "reports" | "team" | "settings";
+export type NavKey = "dashboard" | "leads" | "follow-ups" | "imports" | "reports" | "targets" | "team" | "settings";
 
 export function navFor(role: Role): NavKey[] {
   const items: NavKey[] = ["dashboard", "leads", "follow-ups"];
   if (can(role, "import")) items.push("imports");
   items.push("reports");
-  if (can(role, "viewTeamWorkload")) items.push("team");
+  if (can(role, "viewTeamWorkload")) items.push("targets", "team");
   if (can(role, "manageSettings")) items.push("settings");
   return items;
 }

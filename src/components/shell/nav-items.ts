@@ -4,6 +4,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   Settings,
+  Target,
   Users,
   UsersRound,
   type LucideIcon,
@@ -16,6 +17,7 @@ export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon
   "follow-ups": { href: "/follow-ups", label: "Follow-ups", icon: CalendarClock },
   imports: { href: "/imports", label: "Imports", icon: FileSpreadsheet },
   reports: { href: "/reports", label: "Reports", icon: ChartColumn },
+  targets: { href: "/targets", label: "Targets", icon: Target },
   team: { href: "/team", label: "Team", icon: UsersRound },
   settings: { href: "/settings", label: "Settings", icon: Settings },
 };

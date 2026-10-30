@@ -5,8 +5,10 @@ import {
   ArrowRightLeft,
   CalendarClock,
   CalendarDays,
+  ChefHat,
   ChevronDown,
   MapPin,
+  Wallet,
   Pencil,
   PhoneCall,
   StickyNote,
@@ -24,13 +26,16 @@ import { Card } from "@/components/ui/card";
 import { InlineAlert } from "@/components/ui/states";
 import { formatCalendarDate, formatDue, formatINR, formatPhone, timeAgo } from "@/lib/domain/format";
 import { eventTiming } from "@/lib/import/dates";
-import { guestRangeLabel, humanizeCode, reviewFlagLabel } from "@/lib/domain/labels";
+import { guestRangeLabel, humanizeCode, reviewFlagLabel, serviceTypeLabel } from "@/lib/domain/labels";
+import { stagesForPhase } from "@/lib/domain/stages";
 import type { BusinessSettings, Staff, WorkloadRow } from "@/lib/domain/types";
 import type { LeadDetail } from "@/lib/leads/queries";
 import { cn } from "@/lib/utils";
 import { FollowUpBadge, PriorityMark, StageBadge, followUpState } from "../badges";
 import { CallLink, CopyPhoneButton } from "../call-link";
 import { LeadActionsProvider, useLeadActions } from "../lead-actions";
+import { DeskCard } from "../pipeline/desk-card";
+import type { DeskMember } from "../pipeline/handoff-sheet";
 import { StageSheet } from "../stage-sheet";
 import { EditDetailsSheet } from "./edit-details-sheet";
 import { FollowUpList } from "./follow-up-list";
@@ -39,7 +44,7 @@ import { RelatedEnquiries } from "./related";
 import { SourceDetails } from "./source-details";
 import { Timeline } from "./timeline";
 
-type Props = { detail: LeadDetail; staff: Staff; settings: BusinessSettings; workload: WorkloadRow[] };
+type Props = { detail: LeadDetail; staff: Staff; settings: BusinessSettings; workload: WorkloadRow[]; deskMembers?: DeskMember[] };
 
 export function LeadDetailView(props: Props) {
   const manager = props.staff.role !== "salesperson";
@@ -53,7 +58,7 @@ export function LeadDetailView(props: Props) {
 const TABS = ["activity", "notes", "follow-ups", "source", "related"] as const;
 type Tab = (typeof TABS)[number];
 
-function Detail({ detail, staff, settings, manager }: Props & { manager: boolean }) {
+function Detail({ detail, staff, settings, manager, deskMembers }: Props & { manager: boolean }) {
   const { lead, followUps, notes, events, related, importInfo } = detail;
   const actions = useLeadActions();
   const [tab, setTab] = useState<Tab>("activity");
@@ -75,6 +80,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
   };
 
   const openLogCall = (prompted = false) => actions.logCall(callTarget, { prompted });
+  const pipelineOn = Boolean(settings?.pipeline_enabled);
 
   return (
     <PageContainer className="pb-28 md:pb-0">
@@ -189,6 +195,15 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
             </div>
           </Card>
 
+          <DeskCard
+            detail={detail}
+            manager={manager}
+            pipelineOn={pipelineOn}
+            members={deskMembers}
+            pendingFollowUps={pending.length}
+            onEditDetails={() => setEditOpen(true)}
+          />
+
           {/* Event facts */}
           <Card>
             <div className="flex items-center justify-between px-4 pt-4 sm:px-5">
@@ -197,8 +212,9 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
                 <Pencil /> Edit details
               </Button>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-7">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-5">
               <Fact icon={<PartyPopper />} label="Occasion" value={humanizeCode(lead.occasion_code)} />
+              <Fact icon={<ChefHat />} label="Service" value={serviceTypeLabel(lead.service_type)} />
               <Fact icon={<UtensilsCrossed />} label="Menu" value={humanizeCode(lead.menu_code)} />
               <Fact icon={<Users />} label="Guests" value={guestRangeLabel(lead.guest_range)} />
               <Fact
@@ -215,6 +231,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
                 }
               />
               <Fact icon={<MapPin />} label="Address" value={lead.event_address ?? "—"} className="col-span-2" />
+              <Fact icon={<Wallet />} label="Budget" value={formatINR(lead.budget_inr as number | null)} />
               <Fact
                 icon={<IndianRupee />}
                 label={lead.stage === "booked" ? "Booking value" : "Quoted"}
@@ -312,6 +329,7 @@ function Detail({ detail, staff, settings, manager }: Props & { manager: boolean
         onOpenChange={setStageOpen}
         lostReasons={settings?.lost_reasons ?? []}
         unqualifiedReasons={settings?.unqualified_reasons ?? []}
+        allowedStages={pipelineOn ? stagesForPhase(lead.phase) : undefined}
       />
       <EditDetailsSheet lead={lead} open={editOpen} onOpenChange={setEditOpen} />
       {nextFollowUp && followUpState(nextFollowUp.due_at) === "overdue" ? (

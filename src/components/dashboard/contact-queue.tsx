@@ -7,12 +7,15 @@ import { CallLink } from "@/components/leads/call-link";
 import { LeadActionsProvider, useLeadActions } from "@/components/leads/lead-actions";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
+import type { ReactNode } from "react";
 import { formatCalendarDate, formatDue, timeAgo } from "@/lib/domain/format";
 import { guestRangeLabel, humanizeCode } from "@/lib/domain/labels";
 import { cn } from "@/lib/utils";
 
 export type QueueItem = {
-  kind: "overdue" | "today" | "new" | "uncontacted" | "event";
+  kind: "overdue" | "today" | "ops" | "new" | "uncontacted" | "event";
+  /** Why it's in the queue, when the kind alone doesn't say (operations steps). */
+  note?: string;
   lead: {
     id: string;
     customer_name: string;
@@ -32,6 +35,7 @@ export type QueueItem = {
 const SECTIONS: { kind: QueueItem["kind"]; title: string; empty?: string }[] = [
   { kind: "overdue", title: "Overdue follow-ups" },
   { kind: "today", title: "Due today" },
+  { kind: "ops", title: "Bookings to run" },
   { kind: "new", title: "Newly assigned" },
   { kind: "uncontacted", title: "Awaiting first call" },
   { kind: "event", title: "Events in the next 7 days" },
@@ -42,6 +46,8 @@ export function ContactQueue(props: {
   title: string;
   items: QueueItem[];
   counts: { overdue: number; today: number; fresh: number; uncontacted: number; events: number };
+  /** Shown under the chips, e.g. the BDE desk's numbers. */
+  banner?: ReactNode;
 }) {
   return (
     <LeadActionsProvider userId={props.userId} canAssign={false}>
@@ -50,7 +56,7 @@ export function ContactQueue(props: {
   );
 }
 
-function Queue({ title, items, counts }: Parameters<typeof ContactQueue>[0]) {
+function Queue({ title, items, counts, banner }: Parameters<typeof ContactQueue>[0]) {
   const chips = [
     { label: "Overdue", value: counts.overdue, href: "/follow-ups?tab=overdue", tone: "red" },
     { label: "Due today", value: counts.today, href: "/follow-ups?tab=today", tone: "amber" },
@@ -85,6 +91,8 @@ function Queue({ title, items, counts }: Parameters<typeof ContactQueue>[0]) {
           </Link>
         ))}
       </div>
+
+      {banner}
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-line">
@@ -136,6 +144,8 @@ function reason(item: QueueItem) {
       return <span>Enquired {timeAgo(item.lead.acquired_at)} · no call logged yet</span>;
     case "event":
       return <span>Event on {formatCalendarDate(item.lead.event_date)}</span>;
+    case "ops":
+      return <span className="text-tint-amber-fg">{item.note}</span>;
   }
 }
 

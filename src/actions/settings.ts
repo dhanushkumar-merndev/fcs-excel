@@ -18,6 +18,17 @@ const schema = z.object({
   unqualified_reasons: reasons,
 });
 
+/** Round robin on or off, and which salespeople are left out of it (admin). */
+export async function updateRoundRobin(input: { enabled: boolean; excluded: string[] }): Promise<ActionResult<{ enabled: boolean; next: string | null }>> {
+  const parsed = z.object({ enabled: z.boolean(), excluded: z.array(z.string().uuid()).max(200) }).safeParse(input);
+  if (!parsed.success) return invalid("Check the round robin settings.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_round_robin", { p_enabled: parsed.data.enabled, p_excluded: parsed.data.excluded });
+  if (error) return fromDbError(error);
+  refresh();
+  return ok(data as { enabled: boolean; next: string | null });
+}
+
 export async function updateSettings(input: z.input<typeof schema>): Promise<ActionResult<null>> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error.issues[0]?.message ?? "Check the settings.");

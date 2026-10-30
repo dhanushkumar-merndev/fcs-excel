@@ -20,6 +20,7 @@ export function StageSheet({
   onOpenChange,
   lostReasons,
   unqualifiedReasons,
+  allowedStages,
 }: {
   lead: { id: string; stage: string; version: number; customer_name: string };
   pendingFollowUps: number;
@@ -27,6 +28,8 @@ export function StageSheet({
   onOpenChange: (open: boolean) => void;
   lostReasons: string[];
   unqualifiedReasons: string[];
+  /** BDE pipeline on: only this desk's stages (moving desks is a handoff; booked is Confirm booking). */
+  allowedStages?: string[];
 }) {
   const run = useRunAction();
   const [requestId, rotate] = useRequestId();
@@ -112,7 +115,7 @@ export function StageSheet({
       <div className="flex flex-col gap-5">
         {error ? <InlineAlert tone="danger">{error}</InlineAlert> : null}
         <div role="radiogroup" aria-label="Stage" className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {STAGES.map((s) => (
+          {STAGES.filter((s) => !allowedStages || allowedStages.includes(s.value) || s.value === lead.stage).map((s) => (
             <button
               key={s.value}
               type="button"
@@ -132,6 +135,12 @@ export function StageSheet({
             </button>
           ))}
         </div>
+
+        {allowedStages ? (
+          <p className="-mt-2 text-[13px] text-fg-muted">
+            Only this desk&apos;s stages are shown. To move the lead on, use the BDE desk card; a booking is confirmed there once the advance is in.
+          </p>
+        ) : null}
 
         {needsReason ? (
           <div className="flex flex-col gap-3">

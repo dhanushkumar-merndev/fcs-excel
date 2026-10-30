@@ -116,3 +116,26 @@ export function importName(fileName: string, sheetName?: string | null): { title
   const sheet = sheetName?.trim();
   return sheet && !/^(csv|sheet ?\d*)$/i.test(sheet) ? { title: sheet, file: fileName } : { title: fileName, file: null };
 }
+
+export const SERVICE_TYPES = [
+  { value: "chef_on_demand", label: "Chef on Demand" },
+  { value: "catering", label: "Catering Services" },
+] as const;
+
+export function serviceTypeLabel(value: string | null | undefined) {
+  return SERVICE_TYPES.find((s) => s.value === value)?.label ?? "—";
+}
+
+export const PAYMENT_KINDS = [
+  { value: "advance", label: "Advance" },
+  { value: "balance", label: "Balance" },
+  { value: "refund", label: "Refund" },
+] as const;
+
+export const PAYMENT_MODES = [
+  { value: "upi", label: "UPI" },
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "card", label: "Card" },
+  { value: "other", label: "Other" },
+] as const;

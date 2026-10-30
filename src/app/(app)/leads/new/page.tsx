@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/card";
 import { PermissionDenied } from "@/components/ui/states";
 import { getCurrentStaff } from "@/lib/auth/dal";
 import { can } from "@/lib/domain/permissions";
-import { getWorkload } from "@/lib/leads/queries";
+import { getSettings, getWorkload } from "@/lib/leads/queries";
 
 export const metadata: Metadata = { title: "New lead" };
 
@@ -26,6 +26,6 @@ async function Content() {
   if (!can(staff.role, "createLead")) {
     return <PermissionDenied description="Only admins and managers can add leads manually." />;
   }
-  const workload = await getWorkload();
-  return <NewLeadForm workload={workload} />;
+  const [workload, settings] = await Promise.all([getWorkload(), getSettings()]);
+  return <NewLeadForm workload={workload} roundRobin={settings.round_robin_enabled} />;
 }

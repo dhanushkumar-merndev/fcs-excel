@@ -1,5 +1,10 @@
 import {
   ArrowRightLeft,
+  BadgeCheck,
+  ChefHat,
+  CircleCheckBig,
+  IndianRupee,
+  MoveRight,
   CalendarCheck,
   CalendarClock,
   CalendarX,
@@ -16,8 +21,8 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatCalendarDate, formatDateTime, formatDue, formatINR, timeAgo } from "@/lib/domain/format";
-import { callOutcomeLabel, guestRangeLabel, humanizeCode } from "@/lib/domain/labels";
-import { stageLabel } from "@/lib/domain/stages";
+import { PAYMENT_KINDS, callOutcomeLabel, guestRangeLabel, humanizeCode, serviceTypeLabel } from "@/lib/domain/labels";
+import { phaseLabel, stageLabel } from "@/lib/domain/stages";
 import type { LeadEventRow } from "@/lib/domain/types";
 
 type Event = LeadEventRow & { actor: { full_name: string } | null };
@@ -34,6 +39,8 @@ const FIELD_LABELS: Record<string, string> = {
   priority: "Priority",
   quoted_amount_inr: "Quoted amount",
   booking_value_inr: "Booking value",
+  service_type: "Service",
+  budget_inr: "Budget",
 };
 
 function fieldValue(field: string, value: unknown) {
@@ -48,7 +55,10 @@ function fieldValue(field: string, value: unknown) {
       return formatCalendarDate(String(value));
     case "quoted_amount_inr":
     case "booking_value_inr":
+    case "budget_inr":
       return formatINR(value as number);
+    case "service_type":
+      return serviceTypeLabel(String(value));
     default:
       return String(value);
   }
@@ -112,6 +122,24 @@ function describe(e: Event): { icon: ReactNode; title: ReactNode; detail?: React
       return { icon: <CalendarX />, title: `Cancelled follow-up: ${s("purpose")}`, detail: s("reason") || undefined };
     case "stage_changed":
       return { icon: <Tag />, title: `Stage: ${stageLabel(s("from"))} → ${stageLabel(s("to"))}`, detail: s("reason") || undefined };
+    case "handed_off":
+      return {
+        icon: <MoveRight />,
+        title: `Handed to ${phaseLabel(s("to_phase"))}${s("to_name") ? ` · ${s("to_name")}` : ""}`,
+        detail: [s("from_phase") ? `From ${phaseLabel(s("from_phase"))}${s("from_name") ? ` (${s("from_name")})` : ""}` : "", s("note")].filter(Boolean).join("\n") || undefined,
+      };
+    case "payment_recorded":
+      return {
+        icon: <IndianRupee />,
+        title: `Recorded ${(PAYMENT_KINDS.find((k) => k.value === s("kind"))?.label ?? "payment").toLowerCase()} of ${formatINR(s("amount_inr"))}`,
+        detail: p.paid_on ? `Received ${formatCalendarDate(s("paid_on"))}` : undefined,
+      };
+    case "handover_acknowledged":
+      return { icon: <BadgeCheck />, title: "Acknowledged the booking handover" };
+    case "chef_assigned":
+      return { icon: <ChefHat />, title: `${p.changed ? "Updated chef" : "Assigned chef"}: ${s("chef_name")}`, detail: s("chef_phone") || undefined };
+    case "event_completed":
+      return { icon: <CircleCheckBig />, title: "Marked the event completed", detail: s("note") || undefined };
     case "lead_reopened":
       return { icon: <RotateCcw />, title: "Reopened the lead", detail: s("reason") || undefined };
     case "details_updated": {

@@ -10,14 +10,19 @@ import { importName } from "@/lib/domain/labels";
 import { OPEN_STAGES, STAGES, stageLabel } from "@/lib/domain/stages";
 import type { ImportBatchRow, Staff, WorkloadRow } from "@/lib/domain/types";
 import { leadsHref } from "@/lib/leads/filters";
-import { getWorkload } from "@/lib/leads/queries";
+import { deskKpis, planFromRow } from "@/lib/domain/targets";
+import { getPipelineKpis, getSalesTarget, getSettings, getWorkload } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
+import { PipelineStrip } from "./desk-kpis";
 import { StatCard } from "./stat-card";
 
 export async function ManagerDashboard({ staff }: { staff: Staff }) {
   const supabase = await createClient();
   const today = todayIST();
-  const [summaryRes, workload, importsRes] = await Promise.all([
+  const monthStart = `${today.slice(0, 8)}01`;
+  const settings = await getSettings();
+  const pipelineOn = Boolean(settings?.pipeline_enabled);
+  const [summaryRes, workload, importsRes, kpis, target] = await Promise.all([
     supabase.rpc("dashboard_summary"),
     getWorkload(),
     supabase
@@ -25,6 +30,8 @@ export async function ManagerDashboard({ staff }: { staff: Staff }) {
       .select("id, file_name, sheet_name, created_at, status, created_count, skipped_count, invalid_count, failed_count, pending_count, review_count, last_heartbeat_at, uploader:profiles!import_batches_uploaded_by_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(5),
+    pipelineOn ? getPipelineKpis(monthStart, today).catch(() => null) : Promise.resolve(null),
+    pipelineOn ? getSalesTarget(monthStart) : Promise.resolve(null),
   ]);
   const s = (summaryRes.data ?? {}) as Record<string, number> & { by_stage?: Record<string, number> };
   const byStage = s.by_stage ?? {};
@@ -60,6 +67,38 @@ export async function ManagerDashboard({ staff }: { staff: Staff }) {
         <StatCard label="Lost · last 30 days" value={s.lost_30d ?? 0} href={leadsHref({ stage: ["lost", "unqualified"], closed_from: last30 })} hint="Lost + unqualified" />
         <StatCard label="Needs review" value={s.needs_review ?? 0} href="/leads?view=needs_review" tone="amber" hint="Date or details" />
       </div>
+
+      {kpis ? (
+        <>
+          <PipelineStrip
+            kpis={deskKpis(kpis.desks, planFromRow(target))}
+            period="this month"
+            action={
+              <Link href="/targets" className="text-[13px] text-fg-muted hover:text-fg hover:underline">
+                Targets & scorecard
+              </Link>
+            }
+          />
+          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <StatCard
+              label={`First call late (> ${kpis.sla_minutes} min)`}
+              value={kpis.hygiene.sla_breaches}
+              href={leadsHref({ phase: ["lead_desk"], no_contact: true })}
+              tone="red"
+              hint="BDE 1, not called yet"
+            />
+            <StatCard label="No next action" value={kpis.hygiene.no_next_action} href="/leads?view=no_next_action" tone="amber" hint="Open, nothing scheduled" />
+            <StatCard
+              label="Handover not acknowledged"
+              value={kpis.hygiene.awaiting_handover}
+              href={leadsHref({ phase: ["operations"], stage: ["booked"] })}
+              tone="amber"
+              hint="BDE 4"
+            />
+            <StatCard label="Balance outstanding" value={Math.round(kpis.outstanding)} href="/targets" hint="₹ across bookings with payments" />
+          </div>
+        </>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>

@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import type { Phase } from "@/lib/domain/stages";
 import type { Role, Staff } from "@/lib/domain/types";
 
 /**
@@ -16,11 +17,19 @@ export const getStaffOrNull = cache(async (): Promise<Staff | null> => {
   if (!userId) return null;
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, username, role, is_active")
+    // "*" rather than a column list, so sign-in never breaks if the app is deployed before a
+    // migration adds a column (desk arrived with the BDE pipeline).
+    .select("*")
     .eq("id", userId)
     .maybeSingle();
   if (!profile || !profile.is_active) return null;
-  return { id: profile.id, fullName: profile.full_name, username: profile.username, role: profile.role as Role };
+  return {
+    id: profile.id,
+    fullName: profile.full_name,
+    username: profile.username,
+    role: profile.role as Role,
+    desk: (profile.desk as Phase | null | undefined) ?? null,
+  };
 });
 
 export const getCurrentStaff = cache(async (): Promise<Staff> => {
