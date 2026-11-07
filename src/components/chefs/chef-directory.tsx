@@ -144,7 +144,7 @@ export function ChefDirectoryView({ directory }: { directory: ChefDirectory }) {
 function ChefCard({ chef: c }: { chef: Chef }) {
   const s = STATUS[c.status];
   const type = chefTypeLabel(c.chef_type);
-  const place = [c.location, c.region].filter(Boolean).join(", ");
+  const place = [...new Set([c.location, c.region].filter(Boolean))].join(", ");
   return (
     <Card className="h-full p-4">
       <div className="flex items-start justify-between gap-3">
