@@ -11,6 +11,7 @@ export function can(role: Role, capability: Capability, opts: { salespersonExpor
     case "createLead":
     case "viewTeamWorkload":
     case "viewAllLeads":
+    case "viewChefs":
       return role === "admin" || role === "manager";
     case "export":
       return role === "admin" || role === "manager" || Boolean(opts.salespersonExportEnabled);
@@ -26,17 +27,19 @@ export type Capability =
   | "createLead"
   | "viewTeamWorkload"
   | "viewAllLeads"
+  | "viewChefs"
   | "export"
   | "manageTeam"
   | "manageSettings";
 
-export type NavKey = "dashboard" | "leads" | "follow-ups" | "imports" | "reports" | "targets" | "team" | "settings";
+export type NavKey = "dashboard" | "leads" | "follow-ups" | "imports" | "reports" | "targets" | "team" | "chefs" | "settings";
 
 export function navFor(role: Role): NavKey[] {
   const items: NavKey[] = ["dashboard", "leads", "follow-ups"];
   if (can(role, "import")) items.push("imports");
   items.push("reports");
   if (can(role, "viewTeamWorkload")) items.push("targets", "team");
+  if (can(role, "viewChefs")) items.push("chefs");
   if (can(role, "manageSettings")) items.push("settings");
   return items;
 }

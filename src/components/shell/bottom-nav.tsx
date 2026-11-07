@@ -13,7 +13,7 @@ const ITEMS = [
   { href: "/more", label: "More", icon: Ellipsis },
 ];
 
-const MORE_PATHS = ["/more", "/imports", "/reports", "/targets", "/team", "/settings", "/notifications"];
+const MORE_PATHS = ["/more", "/imports", "/reports", "/targets", "/team", "/chefs", "/settings", "/notifications"];
 
 export function BottomNav({ overdueCount }: { overdueCount: number }) {
   const pathname = usePathname();

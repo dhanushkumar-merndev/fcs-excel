@@ -1,6 +1,7 @@
 import {
   CalendarClock,
   ChartColumn,
+  ChefHat,
   FileSpreadsheet,
   LayoutDashboard,
   Settings,
@@ -19,6 +20,7 @@ export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon
   reports: { href: "/reports", label: "Reports", icon: ChartColumn },
   targets: { href: "/targets", label: "Targets", icon: Target },
   team: { href: "/team", label: "Team", icon: UsersRound },
+  chefs: { href: "/chefs", label: "Chefs", icon: ChefHat },
   settings: { href: "/settings", label: "Settings", icon: Settings },
 };
 
