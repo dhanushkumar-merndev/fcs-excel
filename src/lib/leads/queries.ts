@@ -14,6 +14,7 @@ import type {
 } from "@/lib/domain/types";
 import type { Phase } from "@/lib/domain/stages";
 import type { DeskMetricRow, PersonMetricRow } from "@/lib/domain/targets";
+import type { QuotationLead } from "@/lib/quotation/build";
 import { SORTS, toRpcFilters, type LeadFilters, type ListState } from "./filters";
 
 export const LEAD_LIST_COLUMNS =
@@ -82,6 +83,18 @@ export type LeadDetail = {
   payments: (LeadPaymentRow & { recorder: { full_name: string } | null })[];
   handoffs: (LeadHandoffRow & { from_owner: { full_name: string } | null; to_owner: { full_name: string } | null })[];
 };
+
+/** Just the fields a quotation prints. RLS decides visibility, same as the lead page. */
+export async function getLeadForQuotation(id: string): Promise<(QuotationLead & { id: string }) | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("leads")
+    .select("id, lead_number, customer_name, occasion_code, guest_range, event_date, event_date_raw, event_address, quoted_amount_inr")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as (QuotationLead & { id: string }) | null) ?? null;
+}
 
 export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;

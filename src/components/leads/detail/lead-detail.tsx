@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChefHat,
   ChevronDown,
+  FileText,
   MapPin,
   Wallet,
   Pencil,
@@ -141,6 +142,11 @@ function Detail({ detail, staff, settings, manager, deskMembers }: Props & { man
           <Button variant="secondary" onClick={() => setStageOpen(true)}>
             <ArrowRightLeft /> Stage
           </Button>
+          <Button variant="secondary" asChild>
+            <Link href={`/quotation/${lead.id}`} target="_blank" rel="noopener">
+              <FileText /> Quotation
+            </Link>
+          </Button>
         </div>
       </header>
 
@@ -208,9 +214,16 @@ function Detail({ detail, staff, settings, manager, deskMembers }: Props & { man
           <Card>
             <div className="flex items-center justify-between px-4 pt-4 sm:px-5">
               <h2 className="text-[15px] font-semibold">Event</h2>
-              <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
-                <Pencil /> Edit details
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/quotation/${lead.id}`} target="_blank" rel="noopener">
+                    <FileText /> Quotation
+                  </Link>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil /> Edit details
+                </Button>
+              </div>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 2xl:grid-cols-5">
               <Fact icon={<PartyPopper />} label="Occasion" value={humanizeCode(lead.occasion_code)} />
